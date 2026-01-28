@@ -34,9 +34,9 @@ final class SettingsViewModel: ObservableObject {
         self.userRepository = userRepository ?? UserRepository()
         
         // Load current preferences
-        self.selectedSign = store.preferredSign ?? .aries
-        self.selectedStyle = store.preferredStyle ?? .plain
-        self.tripleMode = store.preferredSlotMode == .triple
+        self.selectedSign = self.store.preferredSign ?? .aries
+        self.selectedStyle = self.store.preferredStyle ?? .plain
+        self.tripleMode = self.store.preferredSlotMode == .triple
     }
     
     // MARK: - Actions
