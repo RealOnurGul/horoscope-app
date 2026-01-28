@@ -13,6 +13,7 @@ final class HomeViewModel: ObservableObject {
     @Published var isRefreshing = false
     @Published var error: String?
     @Published var showPreferencesSheet = false
+    @Published var showExpandedDetails = false
     
     // MARK: - Computed Properties
     
@@ -31,7 +32,7 @@ final class HomeViewModel: ObservableObject {
     var lastUpdatedText: String? {
         guard let horoscope = horoscope else { return nil }
         let timeString = dateProvider.formatTime(horoscope.updatedAt)
-        return "Updated \(timeString)"
+        return "Updated at \(timeString)"
     }
     
     var todayDateText: String {
@@ -40,6 +41,15 @@ final class HomeViewModel: ObservableObject {
     
     var hasValidHoroscope: Bool {
         horoscope != nil && store.isCacheValidForToday()
+    }
+    
+    /// "Today's message" or "Morning message" / "Afternoon message" / "Night message"
+    var slotLabel: String {
+        if store.preferredSlotMode == .triple {
+            let slot = HoroscopeSlot.current()
+            return "\(slot.displayName) message"
+        }
+        return "Today's message"
     }
     
     // MARK: - Dependencies

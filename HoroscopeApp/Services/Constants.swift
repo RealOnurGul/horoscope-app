@@ -72,4 +72,8 @@ enum Constants {
         static let widgetNoData = "Open app to set up"
         static let offlineMessage = "Last saved horoscope (offline)"
     }
+    
+    enum Vela {
+        static let appName = "Vela"
+    }
 }

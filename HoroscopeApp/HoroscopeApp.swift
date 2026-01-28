@@ -51,46 +51,13 @@ struct RootView: View {
     var body: some View {
         Group {
             if appState.hasCompletedOnboarding {
-                MainTabView()
+                TodayView()
             } else {
                 OnboardingFlow {
                     appState.completeOnboarding()
                 }
             }
         }
-        .animation(.easeInOut, value: appState.hasCompletedOnboarding)
-    }
-}
-
-// MARK: - Main Tab View
-
-struct MainTabView: View {
-    @EnvironmentObject var appState: AppState
-    @State private var selectedTab = 0
-    
-    var body: some View {
-        TabView(selection: $selectedTab) {
-            HomeView()
-                .tabItem {
-                    Label("Today", systemImage: "sparkles")
-                }
-                .tag(0)
-            
-            SettingsView(onResetOnboarding: {
-                appState.resetOnboarding()
-            })
-            .tabItem {
-                Label("Settings", systemImage: "gear")
-            }
-            .tag(1)
-            
-            #if DEBUG
-            AdminSeedView()
-                .tabItem {
-                    Label("Admin", systemImage: "wrench.and.screwdriver")
-                }
-                .tag(2)
-            #endif
-        }
+        .animation(Theme.Animation.gentle, value: appState.hasCompletedOnboarding)
     }
 }

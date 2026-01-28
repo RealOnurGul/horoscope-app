@@ -2,29 +2,22 @@ import Foundation
 import SwiftUI
 import Combine
 
-/// ViewModel for the onboarding flow
+/// ViewModel for the Vela onboarding flow
 @MainActor
 final class OnboardingViewModel: ObservableObject {
     
-    // MARK: - Published Properties
-    
-    @Published var currentStep: OnboardingStep = .signSelection
+    @Published var currentStep: OnboardingStep = .welcome
     @Published var selectedSign: ZodiacSign?
     @Published var selectedStyle: HoroscopeStyle?
+    @Published var deliveryTripleMode: Bool = false
     @Published var isLoading = false
     @Published var error: String?
-    
-    // MARK: - Dependencies
     
     private let store: AppGroupStore
     private let userRepository: UserRepository
     private let firebase: FirebaseManager
     
-    // MARK: - Callbacks
-    
     var onComplete: (() -> Void)?
-    
-    // MARK: - Init
     
     init(
         store: AppGroupStore? = nil,
@@ -36,56 +29,54 @@ final class OnboardingViewModel: ObservableObject {
         self.firebase = firebase ?? FirebaseManager.shared
     }
     
-    // MARK: - Navigation
-    
     var canProceed: Bool {
         switch currentStep {
-        case .signSelection:
-            return selectedSign != nil
-        case .styleSelection:
-            return selectedStyle != nil
-        case .confirmation:
+        case .welcome, .delivery, .widgetIntro:
             return true
+        case .personalDetails:
+            return selectedSign != nil && selectedStyle != nil
         }
     }
     
     func proceedToNextStep() {
         switch currentStep {
-        case .signSelection:
-            currentStep = .styleSelection
-        case .styleSelection:
-            currentStep = .confirmation
-        case .confirmation:
+        case .welcome:
+            currentStep = .personalDetails
+        case .personalDetails:
+            currentStep = .delivery
+        case .delivery:
+            currentStep = .widgetIntro
+        case .widgetIntro:
             completeOnboarding()
+        case .signSelection, .styleSelection, .confirmation:
+            currentStep = .personalDetails
         }
     }
     
     func goBack() {
         switch currentStep {
-        case .signSelection:
-            break // Can't go back from first step
-        case .styleSelection:
-            currentStep = .signSelection
-        case .confirmation:
-            currentStep = .styleSelection
+        case .welcome:
+            break
+        case .personalDetails:
+            currentStep = .welcome
+        case .delivery:
+            currentStep = .personalDetails
+        case .widgetIntro:
+            currentStep = .delivery
+        case .signSelection, .styleSelection, .confirmation:
+            currentStep = .welcome
         }
     }
     
-    // MARK: - Selection
-    
     func selectSign(_ sign: ZodiacSign) {
         selectedSign = sign
-        // Save immediately to local storage for widget access
         store.preferredSign = sign
     }
     
     func selectStyle(_ style: HoroscopeStyle) {
         selectedStyle = style
-        // Save immediately to local storage for widget access
         store.preferredStyle = style
     }
-    
-    // MARK: - Completion
     
     private func completeOnboarding() {
         guard let sign = selectedSign, let style = selectedStyle else { return }
@@ -95,29 +86,24 @@ final class OnboardingViewModel: ObservableObject {
         
         Task {
             do {
-                // Ensure user is signed in anonymously
                 if firebase.isConfigured {
                     _ = try await firebase.signInAnonymously()
-                    
-                    // Save preferences to Firestore
-                    let preferences = UserPreferences(
-                        preferredSign: sign,
-                        preferredStyle: style,
-                        preferredSlotMode: .daily
-                    )
-                    await userRepository.savePreferencesWithLocalUpdate(preferences)
                 }
                 
-                // Ensure local storage is updated
-                store.savePreferences(sign: sign, style: style)
+                let mode: SlotMode = deliveryTripleMode ? .triple : .daily
+                let preferences = UserPreferences(
+                    preferredSign: sign,
+                    preferredStyle: style,
+                    preferredSlotMode: mode
+                )
+                await userRepository.savePreferencesWithLocalUpdate(preferences)
                 store.synchronize()
                 
                 isLoading = false
                 onComplete?()
             } catch {
                 isLoading = false
-                self.error = "Failed to save preferences. Please try again."
-                print("❌ Onboarding error: \(error)")
+                self.error = "Something went wrong. Please try again."
             }
         }
     }
@@ -126,23 +112,11 @@ final class OnboardingViewModel: ObservableObject {
 // MARK: - Onboarding Steps
 
 enum OnboardingStep: Int, CaseIterable {
-    case signSelection = 0
-    case styleSelection = 1
-    case confirmation = 2
-    
-    var title: String {
-        switch self {
-        case .signSelection: return "What's your sign?"
-        case .styleSelection: return "Choose your style"
-        case .confirmation: return "You're all set!"
-        }
-    }
-    
-    var subtitle: String {
-        switch self {
-        case .signSelection: return "Select your zodiac sign"
-        case .styleSelection: return "How would you like your horoscopes?"
-        case .confirmation: return "Your daily horoscope awaits"
-        }
-    }
+    case welcome = 0
+    case personalDetails = 1
+    case delivery = 2
+    case widgetIntro = 3
+    case signSelection = 4
+    case styleSelection = 5
+    case confirmation = 6
 }

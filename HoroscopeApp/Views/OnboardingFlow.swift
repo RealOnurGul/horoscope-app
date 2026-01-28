@@ -1,321 +1,336 @@
 import SwiftUI
 
-/// Main onboarding flow container
+/// Vela onboarding: Welcome → Personal → Delivery → Widget intro
 struct OnboardingFlow: View {
     @StateObject private var viewModel = OnboardingViewModel()
     let onComplete: () -> Void
     
     var body: some View {
-        NavigationStack {
+        ZStack {
+            Theme.Colors.background.ignoresSafeArea()
+            
             VStack(spacing: 0) {
-                // Progress indicator
-                ProgressView(value: Double(viewModel.currentStep.rawValue + 1), total: 3)
-                    .tint(.purple)
-                    .padding(.horizontal)
-                    .padding(.top)
+                progressBar
                 
-                // Content
                 TabView(selection: $viewModel.currentStep) {
-                    SignSelectionView(viewModel: viewModel)
-                        .tag(OnboardingStep.signSelection)
-                    
-                    StyleSelectionView(viewModel: viewModel)
-                        .tag(OnboardingStep.styleSelection)
-                    
-                    ConfirmationView(viewModel: viewModel)
-                        .tag(OnboardingStep.confirmation)
+                    WelcomeOnboardingView()
+                        .tag(OnboardingStep.welcome)
+                    PersonalDetailsOnboardingView(viewModel: viewModel)
+                        .tag(OnboardingStep.personalDetails)
+                    DeliveryOnboardingView(viewModel: viewModel)
+                        .tag(OnboardingStep.delivery)
+                    WidgetIntroOnboardingView(viewModel: viewModel)
+                        .tag(OnboardingStep.widgetIntro)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .animation(.easeInOut, value: viewModel.currentStep)
+                .animation(Theme.Animation.gentle, value: viewModel.currentStep)
                 
-                // Navigation buttons
-                OnboardingNavigationButtons(viewModel: viewModel)
-                    .padding()
+                onboardingNavigationButtons
             }
-            .navigationBarTitleDisplayMode(.inline)
         }
-        .onAppear {
-            viewModel.onComplete = onComplete
-        }
+        .onAppear { viewModel.onComplete = onComplete }
         .alert("Error", isPresented: .constant(viewModel.error != nil)) {
             Button("OK") { viewModel.error = nil }
         } message: {
             Text(viewModel.error ?? "")
         }
     }
-}
-
-// MARK: - Navigation Buttons
-
-struct OnboardingNavigationButtons: View {
-    @ObservedObject var viewModel: OnboardingViewModel
     
-    var body: some View {
-        HStack(spacing: 16) {
-            // Back button
-            if viewModel.currentStep != .signSelection {
+    private var progressBar: some View {
+        ProgressView(value: Double(viewModel.currentStep.rawValue + 1), total: 4)
+            .tint(Theme.Colors.accent)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.top, Spacing.md)
+    }
+    
+    private var onboardingNavigationButtons: some View {
+        HStack(spacing: Spacing.md) {
+            if viewModel.currentStep != .welcome {
                 Button {
                     viewModel.goBack()
                 } label: {
                     Text("Back")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(Theme.Colors.textSecondary)
                         .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.secondary.opacity(0.2))
-                        .foregroundColor(.primary)
-                        .cornerRadius(12)
+                        .padding(.vertical, Spacing.md)
+                        .background(Theme.Colors.accentMuted)
+                        .cornerRadius(Theme.Radius.medium)
                 }
             }
             
-            // Continue/Finish button
             Button {
                 viewModel.proceedToNextStep()
             } label: {
                 Group {
                     if viewModel.isLoading {
-                        ProgressView()
-                            .tint(.white)
+                        ProgressView().tint(.white)
                     } else {
-                        Text(viewModel.currentStep == .confirmation ? "Get Started" : "Continue")
+                        Text(buttonTitle)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .padding()
-                .background(viewModel.canProceed ? Color.purple : Color.gray)
-                .foregroundColor(.white)
-                .cornerRadius(12)
+                .padding(.vertical, Spacing.md)
+                .background(viewModel.canProceed ? Theme.Colors.accent : Theme.Colors.divider)
+                .cornerRadius(Theme.Radius.medium)
             }
             .disabled(!viewModel.canProceed || viewModel.isLoading)
         }
+        .padding(.horizontal, Spacing.lg)
+        .padding(.vertical, Spacing.md)
+    }
+    
+    private var buttonTitle: String {
+        switch viewModel.currentStep {
+        case .welcome: return "Continue"
+        case .personalDetails: return "Continue"
+        case .delivery: return "Continue"
+        case .widgetIntro: return "Add to Lock Screen"
+        default: return "Continue"
+        }
     }
 }
 
-// MARK: - Sign Selection
+// MARK: - Welcome
 
-struct SignSelectionView: View {
-    @ObservedObject var viewModel: OnboardingViewModel
-    
-    private let columns = [
-        GridItem(.flexible()),
-        GridItem(.flexible()),
-        GridItem(.flexible())
-    ]
-    
+struct WelcomeOnboardingView: View {
     var body: some View {
-        VStack(spacing: 24) {
-            // Header
-            VStack(spacing: 8) {
-                Text(OnboardingStep.signSelection.title)
-                    .font(.largeTitle.bold())
-                
-                Text(OnboardingStep.signSelection.subtitle)
-                    .font(.body)
-                    .foregroundColor(.secondary)
+        VStack(spacing: Spacing.xl) {
+            Spacer()
+            VStack(spacing: Spacing.lg) {
+                Text(Constants.Vela.appName)
+                    .font(.system(size: 32, weight: .semibold))
+                    .foregroundColor(Theme.Colors.textPrimary)
+                Text("Vela is a personal daily horoscope, delivered when you want it.")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundColor(Theme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(6)
+                    .padding(.horizontal, Spacing.xl)
             }
-            .padding(.top, 32)
-            
-            // Grid of signs
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(ZodiacSign.allCases) { sign in
-                        SignCard(
-                            sign: sign,
-                            isSelected: viewModel.selectedSign == sign
-                        ) {
-                            viewModel.selectSign(sign)
-                        }
-                    }
-                }
-                .padding(.horizontal)
-            }
-            
+            Spacer()
             Spacer()
         }
     }
 }
 
-struct SignCard: View {
-    let sign: ZodiacSign
-    let isSelected: Bool
-    let action: () -> Void
+// MARK: - Personal details (sign + style)
+
+struct PersonalDetailsOnboardingView: View {
+    @ObservedObject var viewModel: OnboardingViewModel
     
     var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Text(sign.emoji)
-                    .font(.system(size: 36))
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("About you")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(Theme.Colors.textPrimary)
+                    Text("Zodiac sign and tone.")
+                        .font(.system(size: 15))
+                        .foregroundColor(Theme.Colors.textSecondary)
+                }
+                .padding(.horizontal, Spacing.lg)
+                .padding(.top, Spacing.xl)
                 
+                signSection
+                styleSection
+            }
+            .padding(.bottom, Spacing.xxl)
+        }
+    }
+    
+    private var signSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("Zodiac sign")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(Theme.Colors.textSecondary)
+            
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.sm) {
+                ForEach(ZodiacSign.allCases) { sign in
+                    onboardingSignCard(sign: sign)
+                }
+            }
+        }
+        .padding(.horizontal, Spacing.lg)
+    }
+    
+    private func onboardingSignCard(sign: ZodiacSign) -> some View {
+        let selected = viewModel.selectedSign == sign
+        return Button {
+            viewModel.selectSign(sign)
+        } label: {
+            VStack(spacing: Spacing.xxs) {
+                Text(sign.emoji).font(.system(size: 28))
                 Text(sign.displayName)
-                    .font(.caption.bold())
-                    .foregroundColor(isSelected ? .white : .primary)
-                
-                Text(sign.dateRange)
-                    .font(.caption2)
-                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(selected ? .white : Theme.Colors.textPrimary)
+                    .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(isSelected ? Color.purple : Color.secondary.opacity(0.1))
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.purple : Color.clear, lineWidth: 2)
-            )
+            .padding(.vertical, Spacing.sm)
+            .background(selected ? Theme.Colors.accent : Theme.Colors.accentMuted)
+            .cornerRadius(Theme.Radius.medium)
         }
         .buttonStyle(.plain)
     }
-}
-
-// MARK: - Style Selection
-
-struct StyleSelectionView: View {
-    @ObservedObject var viewModel: OnboardingViewModel
     
-    var body: some View {
-        VStack(spacing: 24) {
-            // Header
-            VStack(spacing: 8) {
-                Text(OnboardingStep.styleSelection.title)
-                    .font(.largeTitle.bold())
-                
-                Text(OnboardingStep.styleSelection.subtitle)
-                    .font(.body)
-                    .foregroundColor(.secondary)
-            }
-            .padding(.top, 32)
+    private var styleSection: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text("Tone")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(Theme.Colors.textSecondary)
             
-            // Style options
-            VStack(spacing: 16) {
+            VStack(spacing: Spacing.xs) {
                 ForEach(HoroscopeStyle.allCases) { style in
-                    StyleCard(
-                        style: style,
-                        isSelected: viewModel.selectedStyle == style
-                    ) {
-                        viewModel.selectStyle(style)
-                    }
+                    onboardingStyleCard(style: style)
                 }
             }
-            .padding(.horizontal)
-            
-            Spacer()
         }
+        .padding(.horizontal, Spacing.lg)
     }
-}
-
-struct StyleCard: View {
-    let style: HoroscopeStyle
-    let isSelected: Bool
-    let action: () -> Void
     
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 16) {
-                Text(style.emoji)
-                    .font(.system(size: 32))
-                
-                VStack(alignment: .leading, spacing: 4) {
+    private func onboardingStyleCard(style: HoroscopeStyle) -> some View {
+        let selected = viewModel.selectedStyle == style
+        return Button {
+            viewModel.selectStyle(style)
+        } label: {
+            HStack(spacing: Spacing.md) {
+                Text(style.emoji).font(.system(size: 24))
+                VStack(alignment: .leading, spacing: 2) {
                     Text(style.displayName)
-                        .font(.headline)
-                        .foregroundColor(isSelected ? .white : .primary)
-                    
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(selected ? .white : Theme.Colors.textPrimary)
                     Text(style.description)
-                        .font(.subheadline)
-                        .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                        .font(.system(size: 12))
+                        .foregroundColor(selected ? .white.opacity(0.85) : Theme.Colors.textSecondary)
                 }
-                
                 Spacer()
-                
-                if isSelected {
+                if selected {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.white)
-                        .font(.title2)
+                        .font(.system(size: 18))
                 }
             }
-            .padding()
-            .background(isSelected ? Color.purple : Color.secondary.opacity(0.1))
-            .cornerRadius(12)
+            .padding(Spacing.md)
+            .background(selected ? Theme.Colors.accent : Theme.Colors.accentMuted)
+            .cornerRadius(Theme.Radius.medium)
         }
         .buttonStyle(.plain)
     }
 }
 
-// MARK: - Confirmation
+// MARK: - Delivery
 
-struct ConfirmationView: View {
+struct DeliveryOnboardingView: View {
     @ObservedObject var viewModel: OnboardingViewModel
     
     var body: some View {
-        VStack(spacing: 32) {
-            Spacer()
-            
-            // Celebration icon
-            Text("✨")
-                .font(.system(size: 80))
-            
-            // Header
-            VStack(spacing: 8) {
-                Text(OnboardingStep.confirmation.title)
-                    .font(.largeTitle.bold())
-                
-                Text(OnboardingStep.confirmation.subtitle)
-                    .font(.body)
-                    .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text("When should your horoscope arrive?")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(Theme.Colors.textPrimary)
+                Text("Choose one or more.")
+                    .font(.system(size: 15))
+                    .foregroundColor(Theme.Colors.textSecondary)
             }
+            .padding(.horizontal, Spacing.lg)
+            .padding(.top, Spacing.xxl)
             
-            // Selected preferences
-            if let sign = viewModel.selectedSign, let style = viewModel.selectedStyle {
-                VStack(spacing: 16) {
-                    ConfirmationRow(
-                        icon: sign.emoji,
-                        title: "Your Sign",
-                        value: sign.displayName
-                    )
-                    
-                    ConfirmationRow(
-                        icon: style.emoji,
-                        title: "Your Style",
-                        value: style.displayName
-                    )
+            VStack(spacing: Spacing.sm) {
+                deliveryCard(
+                    title: "Once a day",
+                    subtitle: "A single message each day.",
+                    selected: !viewModel.deliveryTripleMode
+                ) {
+                    viewModel.deliveryTripleMode = false
                 }
-                .padding()
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(16)
-                .padding(.horizontal)
+                deliveryCard(
+                    title: "Morning, afternoon & night",
+                    subtitle: "Three messages throughout the day.",
+                    selected: viewModel.deliveryTripleMode
+                ) {
+                    viewModel.deliveryTripleMode = true
+                }
             }
+            .padding(.horizontal, Spacing.lg)
             
-            Spacer()
             Spacer()
         }
     }
+    
+    private func deliveryCard(title: String, subtitle: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(selected ? .white : Theme.Colors.textPrimary)
+                    Text(subtitle)
+                        .font(.system(size: 13))
+                        .foregroundColor(selected ? .white.opacity(0.85) : Theme.Colors.textSecondary)
+                }
+                Spacer()
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.white)
+                        .font(.system(size: 20))
+                }
+            }
+            .padding(Spacing.lg)
+            .background(selected ? Theme.Colors.accent : Theme.Colors.accentMuted)
+            .cornerRadius(Theme.Radius.medium)
+        }
+        .buttonStyle(.plain)
+    }
 }
 
-struct ConfirmationRow: View {
-    let icon: String
-    let title: String
-    let value: String
+// MARK: - Widget intro
+
+struct WidgetIntroOnboardingView: View {
+    @ObservedObject var viewModel: OnboardingViewModel
     
     var body: some View {
-        HStack {
-            Text(icon)
-                .font(.title)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+        VStack(spacing: Spacing.xl) {
+            Spacer()
+            VStack(spacing: Spacing.lg) {
+                RoundedRectangle(cornerRadius: Theme.Radius.medium)
+                    .fill(Theme.Colors.accentMuted)
+                    .frame(height: 120)
+                    .overlay(
+                        VStack(spacing: Spacing.xs) {
+                            Image(systemName: "lock.rectangle.stack")
+                                .font(.system(size: 36))
+                                .foregroundColor(Theme.Colors.accent)
+                            Text("Lock screen widget")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(Theme.Colors.textSecondary)
+                        }
+                    )
+                    .padding(.horizontal, Spacing.xl)
                 
-                Text(value)
-                    .font(.headline)
+                Text("Vela lives on your lock screen. The app is here when you want more.")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundColor(Theme.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(6)
+                    .padding(.horizontal, Spacing.xl)
+                
+                Button("Skip for now") {
+                    viewModel.proceedToNextStep()
+                }
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(Theme.Colors.accent)
             }
-            
+            Spacer()
             Spacer()
         }
     }
 }
 
-// MARK: - Preview
-
 #Preview {
-    OnboardingFlow {
-        print("Onboarding complete")
-    }
+    OnboardingFlow { }
 }
