@@ -12,11 +12,11 @@ final class UserRepository: UserRepositoryProtocol {
     private let store: AppGroupStore
     
     init(
-        firebase: FirebaseManager = .shared,
-        store: AppGroupStore = .shared
+        firebase: FirebaseManager? = nil,
+        store: AppGroupStore? = nil
     ) {
-        self.firebase = firebase
-        self.store = store
+        self.firebase = firebase ?? FirebaseManager.shared
+        self.store = store ?? AppGroupStore.shared
     }
     
     // MARK: - Collection Reference

@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 /// Handles seeding horoscopes to Firestore
 /// Only used in debug builds for demo/testing purposes
@@ -20,13 +21,13 @@ final class HoroscopeSeeder: ObservableObject {
     // MARK: - Init
     
     init(
-        horoscopeRepository: HoroscopeRepository = HoroscopeRepository(),
-        dateProvider: DateProvider = .shared,
-        firebase: FirebaseManager = .shared
+        horoscopeRepository: HoroscopeRepository? = nil,
+        dateProvider: DateProvider? = nil,
+        firebase: FirebaseManager? = nil
     ) {
-        self.horoscopeRepository = horoscopeRepository
-        self.dateProvider = dateProvider
-        self.firebase = firebase
+        self.horoscopeRepository = horoscopeRepository ?? HoroscopeRepository()
+        self.dateProvider = dateProvider ?? DateProvider.shared
+        self.firebase = firebase ?? FirebaseManager.shared
     }
     
     // MARK: - Seeding

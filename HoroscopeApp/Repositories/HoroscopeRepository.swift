@@ -16,13 +16,13 @@ final class HoroscopeRepository: HoroscopeRepositoryProtocol {
     private let dateProvider: DateProvider
     
     init(
-        firebase: FirebaseManager = .shared,
-        store: AppGroupStore = .shared,
-        dateProvider: DateProvider = .shared
+        firebase: FirebaseManager? = nil,
+        store: AppGroupStore? = nil,
+        dateProvider: DateProvider? = nil
     ) {
-        self.firebase = firebase
-        self.store = store
-        self.dateProvider = dateProvider
+        self.firebase = firebase ?? FirebaseManager.shared
+        self.store = store ?? AppGroupStore.shared
+        self.dateProvider = dateProvider ?? DateProvider.shared
     }
     
     // MARK: - Collection Reference

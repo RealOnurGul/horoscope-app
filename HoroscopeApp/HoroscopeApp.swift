@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseCore
+import Combine
 
 @main
 struct HoroscopeApp: App {

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 /// ViewModel for settings screen
 @MainActor
@@ -26,11 +27,11 @@ final class SettingsViewModel: ObservableObject {
     // MARK: - Init
     
     init(
-        store: AppGroupStore = .shared,
-        userRepository: UserRepository = UserRepository()
+        store: AppGroupStore? = nil,
+        userRepository: UserRepository? = nil
     ) {
-        self.store = store
-        self.userRepository = userRepository
+        self.store = store ?? AppGroupStore.shared
+        self.userRepository = userRepository ?? UserRepository()
         
         // Load current preferences
         self.selectedSign = store.preferredSign ?? .aries

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 /// ViewModel for the onboarding flow
 @MainActor
@@ -26,13 +27,13 @@ final class OnboardingViewModel: ObservableObject {
     // MARK: - Init
     
     init(
-        store: AppGroupStore = .shared,
-        userRepository: UserRepository = UserRepository(),
-        firebase: FirebaseManager = .shared
+        store: AppGroupStore? = nil,
+        userRepository: UserRepository? = nil,
+        firebase: FirebaseManager? = nil
     ) {
-        self.store = store
-        self.userRepository = userRepository
-        self.firebase = firebase
+        self.store = store ?? AppGroupStore.shared
+        self.userRepository = userRepository ?? UserRepository()
+        self.firebase = firebase ?? FirebaseManager.shared
     }
     
     // MARK: - Navigation

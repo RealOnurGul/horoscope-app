@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 /// ViewModel for the home screen
 @MainActor
@@ -51,15 +52,15 @@ final class HomeViewModel: ObservableObject {
     // MARK: - Init
     
     init(
-        store: AppGroupStore = .shared,
-        horoscopeRepository: HoroscopeRepository = HoroscopeRepository(),
-        dateProvider: DateProvider = .shared,
-        firebase: FirebaseManager = .shared
+        store: AppGroupStore? = nil,
+        horoscopeRepository: HoroscopeRepository? = nil,
+        dateProvider: DateProvider? = nil,
+        firebase: FirebaseManager? = nil
     ) {
-        self.store = store
-        self.horoscopeRepository = horoscopeRepository
-        self.dateProvider = dateProvider
-        self.firebase = firebase
+        self.store = store ?? AppGroupStore.shared
+        self.horoscopeRepository = horoscopeRepository ?? HoroscopeRepository()
+        self.dateProvider = dateProvider ?? DateProvider.shared
+        self.firebase = firebase ?? FirebaseManager.shared
         
         // Load cached horoscope immediately
         loadCachedHoroscope()
