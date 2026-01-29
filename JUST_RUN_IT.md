@@ -104,7 +104,10 @@ When you want real horoscopes and the widget:
    **Organization Identifier:** e.g. `com.onurgul`
 3. Create the project **inside** your **horoscope-app** folder (or in **Code** next to **horoscope-app**).
 4. **Remove** the default app group (the one with `ContentView`, etc.): right‑click → Delete → **Remove Reference**.
-5. **File → Add Files to "HoroscopeApp"...** → select the **HoroscopeApp** folder from **horoscope-app** → **Add to targets: HoroscopeApp** → Add.
-6. Then do **Step 1** (Firebase) and **Step 2** (@main) above, and **Step 3** (Run).
+5. **File → Add Files to "HoroscopeApp"...** → select the **HoroscopeApp** folder from **horoscope-app** → **Add to targets: HoroscopeApp** → **uncheck "Copy items"** → Add.
+6. Add the **HoroscopeApp** folder **only once**. Adding it again creates "HoroscopeApp 2", "HoroscopeApp 3", etc. See **XCODE_STABLE_SETUP.md** to fix duplicates and Build Settings.
+7. Then do **Step 1** (Firebase) and **Step 2** (@main) above, and **Step 3** (Run).
 
 That’s it. Run it, tap through onboarding and home, and you’ll see what it looks like.
+
+**Git pull = automatic:** Once the project points at **horoscope-app**, `git pull` updates the files and Xcode builds the latest code. No need to re-add folders or “pull into Xcode.”
