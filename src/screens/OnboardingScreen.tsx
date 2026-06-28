@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
-  ImageBackground,
   KeyboardAvoidingView,
   PanResponder,
   Platform,
@@ -12,7 +11,6 @@ import {
   Text,
   TextInput,
   View,
-  useWindowDimensions,
 } from 'react-native';
 
 import { colors } from '../theme';
@@ -41,9 +39,9 @@ const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: CURRENT_YEAR - 1899 }, (_, index) => CURRENT_YEAR - index);
 const CITY_SUGGESTIONS = ['Toronto, Canada', 'New York, USA', 'London, UK', 'Istanbul, Türkiye', 'Tokyo, Japan'];
 const TOTAL_STEPS = 4;
+const DISPLAY_FONT = Platform.select({ android: 'serif', default: 'serif', ios: 'Didot' });
 
 export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
-  const { height } = useWindowDimensions();
   const [step, setStep] = useState(0);
   const [month, setMonth] = useState(5);
   const [day, setDay] = useState(14);
@@ -53,7 +51,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   const [birthPlace, setBirthPlace] = useState('');
   const sceneY = useRef(new Animated.Value(0)).current;
   const sceneOpacity = useRef(new Animated.Value(1)).current;
-  const wind = useRef(new Animated.Value(0)).current;
+  const sceneScale = useRef(new Animated.Value(1)).current;
   const isTransitioning = useRef(false);
 
   const maxDay = useMemo(() => new Date(year, month, 0).getDate(), [month, year]);
@@ -69,28 +67,24 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     if (isTransitioning.current || nextStep === step || nextStep < 0 || nextStep > TOTAL_STEPS) return;
     isTransitioning.current = true;
     const direction = nextStep > step ? -1 : 1;
-    wind.setValue(0);
 
     Animated.parallel([
       Animated.timing(sceneY, {
-        duration: 280,
-        easing: Easing.in(Easing.cubic),
-        toValue: direction * height * 0.18,
+        duration: 210,
+        easing: Easing.inOut(Easing.cubic),
+        toValue: direction * 30,
         useNativeDriver: true,
       }),
-      Animated.timing(sceneOpacity, { duration: 220, toValue: 0, useNativeDriver: true }),
-      Animated.timing(wind, {
-        duration: 520,
-        easing: Easing.out(Easing.cubic),
-        toValue: 1,
-        useNativeDriver: true,
-      }),
+      Animated.timing(sceneOpacity, { duration: 180, toValue: 0, useNativeDriver: true }),
+      Animated.timing(sceneScale, { duration: 210, toValue: 0.985, useNativeDriver: true }),
     ]).start(() => {
       setStep(nextStep);
-      sceneY.setValue(-direction * height * 0.16);
+      sceneY.setValue(-direction * 38);
+      sceneScale.setValue(0.99);
       Animated.parallel([
-        Animated.spring(sceneY, { damping: 20, mass: 0.8, stiffness: 115, toValue: 0, useNativeDriver: true }),
-        Animated.timing(sceneOpacity, { duration: 360, toValue: 1, useNativeDriver: true }),
+        Animated.spring(sceneY, { damping: 24, mass: 0.75, stiffness: 145, toValue: 0, useNativeDriver: true }),
+        Animated.timing(sceneOpacity, { duration: 300, toValue: 1, useNativeDriver: true }),
+        Animated.spring(sceneScale, { damping: 22, stiffness: 160, toValue: 1, useNativeDriver: true }),
       ]).start(() => {
         isTransitioning.current = false;
       });
@@ -117,26 +111,22 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     });
   }
 
-  const backgroundSource = step === 4
-    ? require('../../assets/zodiac-astrolabe-v2.png')
-    : require('../../assets/celestial-descent-v2.png');
-
   return (
-    <ImageBackground resizeMode="cover" source={backgroundSource} style={styles.background}>
-      <View style={[styles.backgroundVeil, step === 4 && styles.revealVeil]} />
-      <AmbientStars />
-      <WindShift progress={wind} />
+    <View style={styles.background}>
+      <CosmicBackdrop reveal={step === 4} />
 
       {step > 0 ? (
         <ProgressHeader
           currentStep={step}
           onBack={() => transitionTo(step - 1)}
-          signSymbol={sign.symbol}
         />
       ) : null}
 
       <Animated.View
-        style={[styles.scene, { opacity: sceneOpacity, transform: [{ translateY: sceneY }] }]}
+        style={[
+          styles.scene,
+          { opacity: sceneOpacity, transform: [{ translateY: sceneY }, { scale: sceneScale }] },
+        ]}
       >
         {step === 0 ? <WelcomeStep onContinue={() => transitionTo(1)} /> : null}
         {step === 1 ? (
@@ -178,31 +168,36 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
           />
         ) : null}
       </Animated.View>
-    </ImageBackground>
+    </View>
   );
 }
 
 function WelcomeStep({ onContinue }: { onContinue: () => void }) {
   return (
     <View style={styles.welcomeContent}>
-      <View>
-        <Text style={styles.brand}>HOROSCOPE</Text>
-        <View style={styles.brandRule} />
+      <View style={styles.brandRow}>
+        <Text style={styles.brand}>NATAL</Text>
+        <Text style={styles.brandMeta}>PRIVATE PROFILE  /  01—04</Text>
       </View>
 
       <View style={styles.welcomeCopy}>
-        <Text style={styles.welcomeKicker}>A MAP OF YOUR INNER SKY</Text>
-        <Text style={styles.welcomeTitle}>Your story is{`\n`}written above.</Text>
+        <View style={styles.welcomeIndexRow}>
+          <Text style={styles.welcomeIndex}>01</Text>
+          <View style={styles.welcomeIndexRule} />
+          <Text style={styles.welcomeIndexLabel}>BEGIN HERE</Text>
+        </View>
+        <Text style={styles.welcomeTitle}>Know your place{`\n`}in the sky.</Text>
         <Text style={styles.welcomeBody}>
-          Descend through the stars and discover the rhythm you arrived with.
+          A precise daily horoscope, shaped by the details of your birth.
         </Text>
       </View>
 
       <View>
-        <PrimaryButton label="Begin the journey" onPress={onContinue} />
+        <PrimaryButton label="Create my profile" onPress={onContinue} />
         <View style={styles.descentHint}>
-          <View style={styles.descentLine} />
-          <Text style={styles.descentText}>YOUR SKY AWAITS BELOW</Text>
+          <Text style={styles.descentText}>FOUR DETAILS</Text>
+          <View style={styles.descentDot} />
+          <Text style={styles.descentText}>PRIVATE BY DEFAULT</Text>
         </View>
       </View>
     </View>
@@ -234,14 +229,14 @@ function DateWheelStep({
 }) {
   return (
     <StepShell
-      eyebrow="YOUR BEGINNING"
-      title="When did you arrive?"
-      description="Spin the celestial wheels. Your sign will appear as the date settles into place."
+      eyebrow="01  /  DATE"
+      title="Your date of birth"
+      description="Set the exact date. Your sun sign updates as you move through the calendar."
     >
       <View style={styles.signPreview}>
         <Text style={styles.signPreviewSymbol}>{signSymbol}</Text>
         <View>
-          <Text style={styles.signPreviewLabel}>YOUR SUN SIGN</Text>
+          <Text style={styles.signPreviewLabel}>SUN SIGN</Text>
           <Text style={styles.signPreviewName}>{signName}</Text>
         </View>
       </View>
@@ -271,7 +266,7 @@ function DateWheelStep({
         />
       </View>
 
-      <PrimaryButton label="Follow the light" onPress={onContinue} />
+      <PrimaryButton label="Next: birth time" onPress={onContinue} />
     </StepShell>
   );
 }
@@ -368,9 +363,9 @@ function TimeOrbitStep({
 
   return (
     <StepShell
-      eyebrow="YOUR FIRST LIGHT"
-      title="What was the sky doing?"
-      description="Guide the sun around the day. An estimate is more than enough."
+      eyebrow="02  /  TIME"
+      title="Your birth time"
+      description="Move the marker to the closest hour. An estimate is completely fine."
     >
       <View style={styles.orbitWrap}>
         <View {...panResponder.panHandlers} style={[styles.timeDial, { height: dialSize, width: dialSize }]}>
@@ -378,9 +373,9 @@ function TimeOrbitStep({
           <View style={styles.orbitVertical} />
           <View style={styles.orbitHorizontal} />
           <Text style={[styles.orbitMarker, styles.orbitMarkerTop]}>MIDNIGHT</Text>
-          <Text style={[styles.orbitMarker, styles.orbitMarkerRight]}>6 PM</Text>
+          <Text style={[styles.orbitMarker, styles.orbitMarkerRight]}>6 AM</Text>
           <Text style={[styles.orbitMarker, styles.orbitMarkerBottom]}>NOON</Text>
-          <Text style={[styles.orbitMarker, styles.orbitMarkerLeft]}>6 AM</Text>
+          <Text style={[styles.orbitMarker, styles.orbitMarkerLeft]}>6 PM</Text>
           <View style={[styles.sunKnob, { left: knobX, top: knobY }]}>
             <View style={styles.sunCore} />
           </View>
@@ -391,7 +386,7 @@ function TimeOrbitStep({
         </View>
       </View>
 
-      <PrimaryButton label="Continue downward" onPress={onContinue} />
+      <PrimaryButton label="Next: birthplace" onPress={onContinue} />
       <Pressable
         onPress={() => {
           onChange(null);
@@ -417,11 +412,11 @@ function PlaceGlobeStep({
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
       <StepShell
-        eyebrow="YOUR HORIZON"
-        title="Where did Earth meet you?"
-        description="Choose a city, or leave this detail among the stars for now."
+        eyebrow="03  /  PLACE"
+        title="Your birthplace"
+        description="Enter a city and country. You can skip this and add it later."
       >
-        <CelestialGlobe />
+        <CoordinateField />
         <View style={styles.placeField}>
           <Text style={styles.placePin}>⌖</Text>
           <TextInput
@@ -442,65 +437,47 @@ function PlaceGlobeStep({
             </Pressable>
           ))}
         </View>
-        <PrimaryButton label={value.trim() ? 'Set this horizon' : 'Skip for now'} onPress={onContinue} />
+        <PrimaryButton label={value.trim() ? 'Review profile' : 'Skip for now'} onPress={onContinue} />
       </StepShell>
     </KeyboardAvoidingView>
   );
 }
 
-function CelestialGlobe() {
-  const rotation = useRef(new Animated.Value(0)).current;
+function CoordinateField() {
+  const scan = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const loop = Animated.loop(
-      Animated.timing(rotation, {
-        duration: 12000,
-        easing: Easing.linear,
-        toValue: 1,
-        useNativeDriver: true,
-      }),
+      Animated.sequence([
+        Animated.timing(scan, { duration: 3600, easing: Easing.inOut(Easing.cubic), toValue: 1, useNativeDriver: true }),
+        Animated.timing(scan, { duration: 3600, easing: Easing.inOut(Easing.cubic), toValue: 0, useNativeDriver: true }),
+      ]),
     );
     loop.start();
     return () => loop.stop();
-  }, [rotation]);
+  }, [scan]);
 
   return (
-    <View style={styles.globeStage}>
-      <View style={styles.globeHalo} />
-      <View style={styles.globe}>
-        <View style={styles.globeShade} />
-        <View style={[styles.globeLatitude, { top: 48 }]} />
-        <View style={[styles.globeLatitude, { bottom: 48 }]} />
-        <View style={[styles.globeMeridian, { transform: [{ rotate: '26deg' }] }]} />
-        <View style={[styles.globeMeridian, { transform: [{ rotate: '-26deg' }] }]} />
-        <Animated.View
-          style={[
-            styles.continentGroup,
-            {
-              transform: [{
-                rotate: rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }),
-              }],
-            },
-          ]}
-        >
-          <View style={[styles.continent, styles.continentOne]} />
-          <View style={[styles.continent, styles.continentTwo]} />
-          <View style={[styles.continent, styles.continentThree]} />
-        </Animated.View>
-        <View style={styles.globeHighlight} />
-      </View>
+    <View style={styles.coordinateStage}>
+      {[1, 2, 3, 4].map((index) => (
+        <View key={`h-${index}`} style={[styles.coordinateHorizontal, { top: `${index * 20}%` }]} />
+      ))}
+      {[1, 2, 3, 4, 5].map((index) => (
+        <View key={`v-${index}`} style={[styles.coordinateVertical, { left: `${index * 16.66}%` }]} />
+      ))}
+      <View style={styles.coordinateOrbitOuter} />
+      <View style={styles.coordinateOrbitInner} />
+      <View style={styles.coordinateCrossHorizontal} />
+      <View style={styles.coordinateCrossVertical} />
+      <View style={styles.coordinateTarget} />
       <Animated.View
         style={[
-          styles.globeOrbit,
-          {
-            transform: [{
-              rotate: rotation.interpolate({ inputRange: [0, 1], outputRange: ['12deg', '372deg'] }),
-            }],
-          },
+          styles.coordinateScan,
+          { transform: [{ translateX: scan.interpolate({ inputRange: [0, 1], outputRange: [-130, 130] }) }] },
         ]}
-      >
-        <View style={styles.globeSatellite} />
-      </Animated.View>
+      />
+      <Text style={styles.coordinateLabelLeft}>LATITUDE</Text>
+      <Text style={styles.coordinateLabelRight}>LONGITUDE</Text>
     </View>
   );
 }
@@ -534,24 +511,14 @@ function RevealStep({
   return (
     <View style={styles.revealContent}>
       <View style={styles.revealTop}>
-        <Text style={styles.revealEyebrow}>THE SKY REMEMBERS</Text>
-        <Animated.View
-          style={[
-            styles.revealSymbolWrap,
-            {
-              transform: [
-                { scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) },
-                { translateY: pulse.interpolate({ inputRange: [0, 1], outputRange: [0, -5] }) },
-              ],
-            },
-          ]}
-        >
-          <Text style={styles.revealSymbol}>{sign.symbol}</Text>
+        <Text style={styles.revealEyebrow}>04  /  YOUR SUN SIGN</Text>
+        <Animated.View style={{ transform: [{ translateY: pulse.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }] }}>
+          <Astrolabe size={270} symbol={sign.symbol} />
         </Animated.View>
       </View>
 
       <View style={styles.revealCard}>
-        <Text style={styles.revealIntro}>You arrived beneath</Text>
+        <Text style={styles.revealIntro}>Your profile begins with</Text>
         <Text style={styles.revealName}>{sign.name}</Text>
         <Text style={styles.revealMeta}>{sign.dates}  ·  {sign.element}</Text>
         <View style={styles.divider} />
@@ -559,9 +526,9 @@ function RevealStep({
           label="Born"
           value={birthDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
         />
-        <ProfileLine label="First light" value={birthTimeWindow ?? 'Unknown'} />
-        <ProfileLine label="Horizon" value={birthPlace.trim() || 'Uncharted'} />
-        <PrimaryButton label="Enter my sky" onPress={onFinish} />
+        <ProfileLine label="Time" value={birthTimeWindow ?? 'Not provided'} />
+        <ProfileLine label="Place" value={birthPlace.trim() || 'Not provided'} />
+        <PrimaryButton label="View today’s reading" onPress={onFinish} />
       </View>
     </View>
   );
@@ -595,63 +562,128 @@ function StepShell({
 function ProgressHeader({
   currentStep,
   onBack,
-  signSymbol,
 }: {
   currentStep: number;
   onBack: () => void;
-  signSymbol: string;
 }) {
   return (
     <View style={styles.progressHeader}>
       <Pressable accessibilityLabel="Go back" hitSlop={12} onPress={onBack} style={styles.backButton}>
-        <Text style={styles.back}>↑</Text>
+        <Text style={styles.back}>BACK</Text>
       </Pressable>
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${(currentStep / TOTAL_STEPS) * 100}%` }]} />
       </View>
-      <Text style={styles.headerSign}>{signSymbol}</Text>
+      <Text style={styles.headerSign}>0{currentStep} / 04</Text>
     </View>
   );
 }
 
-function WindShift({ progress }: { progress: Animated.Value }) {
+function CosmicBackdrop({ reveal }: { reveal: boolean }) {
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {[0, 1, 2, 3, 4, 5].map((index) => (
-        <Animated.View
-          key={index}
-          style={[
-            styles.windStreak,
-            {
-              left: `${8 + index * 17}%`,
-              opacity: progress.interpolate({ inputRange: [0, 0.15, 0.75, 1], outputRange: [0, 0.8, 0.45, 0] }),
-              transform: [
-                { rotate: '-14deg' },
-                { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-220 - index * 24, 900 + index * 32] }) },
-              ],
-            },
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
-
-function AmbientStars() {
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <View style={[styles.backdropGlow, styles.backdropGlowTop, reveal && styles.backdropGlowReveal]} />
+      <View style={[styles.backdropGlow, styles.backdropGlowBottom]} />
+      <View style={styles.backdropArcLarge} />
+      <View style={styles.backdropArcSmall} />
+      <View style={styles.backdropAxisVertical} />
+      <View style={styles.backdropAxisHorizontal} />
       {[
-        [12, 18, 2],
-        [85, 15, 3],
-        [71, 34, 2],
-        [17, 48, 3],
-        [89, 61, 2],
-        [9, 78, 2],
-        [63, 84, 3],
-        [91, 91, 2],
+        [8, 13, 2], [22, 8, 1], [44, 16, 2], [79, 11, 1], [91, 24, 2],
+        [14, 38, 1], [72, 43, 2], [89, 56, 1], [8, 67, 2], [34, 77, 1],
+        [65, 83, 2], [93, 89, 1], [19, 94, 1],
       ].map(([left, top, size], index) => (
         <View key={index} style={[styles.star, { height: size, left: `${left}%`, top: `${top}%`, width: size }]} />
       ))}
+      <View style={[styles.constellationLine, { left: '72%', top: '18%', transform: [{ rotate: '28deg' }] }]} />
+      <View style={[styles.constellationLine, { left: '78%', top: '23%', transform: [{ rotate: '-38deg' }] }]} />
+      <View style={[styles.constellationNode, { left: '71%', top: '17.5%' }]} />
+      <View style={[styles.constellationNode, { left: '82%', top: '25%' }]} />
+    </View>
+  );
+}
+
+function Astrolabe({ size, symbol }: { size: number; symbol: string }) {
+  const rotation = useRef(new Animated.Value(0)).current;
+  const center = size / 2;
+  const outerRadius = size / 2 - 8;
+  const innerSize = size * 0.68;
+  const coreSize = size * 0.37;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(rotation, {
+        duration: 24000,
+        easing: Easing.linear,
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [rotation]);
+
+  return (
+    <View style={[styles.astrolabe, { height: size, width: size }]}>
+      <View style={[styles.astrolabeGlow, { borderRadius: center, height: size, width: size }]} />
+      <Animated.View
+        style={[
+          styles.astrolabeOuterRing,
+          {
+            borderRadius: center,
+            height: size - 8,
+            left: 4,
+            top: 4,
+            transform: [{ rotate: rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }],
+            width: size - 8,
+          },
+        ]}
+      >
+        {Array.from({ length: 32 }, (_, index) => {
+          const angle = (index / 32) * Math.PI * 2;
+          const major = index % 4 === 0;
+          return (
+            <View
+              key={index}
+              style={[
+                styles.astrolabeTick,
+                major && styles.astrolabeTickMajor,
+                {
+                  left: center - 4 + Math.cos(angle) * outerRadius,
+                  top: center - 4 + Math.sin(angle) * outerRadius,
+                  transform: [{ rotate: `${(index / 32) * 360 + 90}deg` }],
+                },
+              ]}
+            />
+          );
+        })}
+      </Animated.View>
+      <Animated.View
+        style={[
+          styles.astrolabeInnerRing,
+          {
+            borderRadius: innerSize / 2,
+            height: innerSize,
+            left: (size - innerSize) / 2,
+            top: (size - innerSize) / 2,
+            transform: [{ rotate: rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] }) }],
+            width: innerSize,
+          },
+        ]}
+      >
+        <View style={styles.astrolabeInnerAxisOne} />
+        <View style={styles.astrolabeInnerAxisTwo} />
+      </Animated.View>
+      <View style={[styles.astrolabeCrossVertical, { height: size - 40, left: center - 0.5, top: 20 }]} />
+      <View style={[styles.astrolabeCrossHorizontal, { left: 20, top: center - 0.5, width: size - 40 }]} />
+      <View
+        style={[
+          styles.astrolabeCore,
+          { borderRadius: coreSize / 2, height: coreSize, left: (size - coreSize) / 2, top: (size - coreSize) / 2, width: coreSize },
+        ]}
+      >
+        <Text style={[styles.astrolabeSymbol, { fontSize: coreSize * 0.54 }]}>{symbol}</Text>
+      </View>
     </View>
   );
 }
@@ -660,9 +692,7 @@ function PrimaryButton({ label, onPress }: { label: string; onPress: () => void 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}>
       <Text style={styles.primaryButtonLabel}>{label}</Text>
-      <View style={styles.buttonOrb}>
-        <Text style={styles.primaryButtonArrow}>↓</Text>
-      </View>
+      <Text style={styles.primaryButtonArrow}>→</Text>
     </Pressable>
   );
 }
@@ -692,103 +722,121 @@ function formatHour(hour: number) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  background: { backgroundColor: colors.background, flex: 1 },
-  backgroundVeil: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(4, 6, 18, 0.55)' },
-  revealVeil: { backgroundColor: 'rgba(4, 5, 15, 0.25)' },
+  background: { backgroundColor: '#060708', flex: 1, overflow: 'hidden' },
   scene: { flex: 1 },
-  star: { backgroundColor: '#fff8dc', borderRadius: 99, opacity: 0.72, position: 'absolute' },
-  windStreak: { backgroundColor: '#e6d8ff', borderRadius: 99, height: 170, position: 'absolute', top: 0, width: 1 },
+  star: { backgroundColor: '#d9c89f', borderRadius: 99, opacity: 0.28, position: 'absolute' },
+  backdropGlow: { borderWidth: 1, position: 'absolute', shadowOffset: { height: 0, width: 0 } },
+  backdropGlowTop: { backgroundColor: 'rgba(168,145,94,0.025)', borderColor: 'rgba(203,181,128,0.09)', borderRadius: 230, height: 460, right: -240, shadowColor: '#b49b66', shadowOpacity: 0.06, shadowRadius: 70, top: -170, width: 460 },
+  backdropGlowBottom: { backgroundColor: 'rgba(255,255,255,0.012)', borderColor: 'rgba(255,255,255,0.05)', borderRadius: 240, bottom: -300, height: 480, left: -260, shadowColor: '#ffffff', shadowOpacity: 0.03, shadowRadius: 90, width: 480 },
+  backdropGlowReveal: { backgroundColor: 'rgba(183,157,96,0.04)', borderColor: 'rgba(215,190,130,0.12)' },
+  backdropArcLarge: { borderColor: 'rgba(209,188,139,0.06)', borderRadius: 270, borderWidth: 1, height: 540, left: -360, position: 'absolute', top: 120, width: 540 },
+  backdropArcSmall: { borderColor: 'rgba(255,255,255,0.045)', borderRadius: 130, borderWidth: 1, bottom: 110, height: 260, position: 'absolute', right: -180, width: 260 },
+  backdropAxisVertical: { backgroundColor: 'rgba(255,255,255,0.018)', bottom: 0, left: '50%', position: 'absolute', top: 0, width: 1 },
+  backdropAxisHorizontal: { backgroundColor: 'rgba(255,255,255,0.014)', height: 1, left: 0, position: 'absolute', right: 0, top: '52%' },
+  constellationLine: { backgroundColor: 'rgba(213,196,147,0.1)', height: 1, position: 'absolute', width: 48 },
+  constellationNode: { backgroundColor: '#b8a271', borderRadius: 2, height: 3, position: 'absolute', width: 3 },
 
-  welcomeContent: { flex: 1, justifyContent: 'space-between', paddingBottom: 26, paddingHorizontal: 24, paddingTop: 22 },
-  brand: { color: colors.gold, fontSize: 12, fontWeight: '800', letterSpacing: 3.4 },
-  brandRule: { backgroundColor: colors.gold, height: 1, marginTop: 10, opacity: 0.5, width: 42 },
-  welcomeCopy: { marginTop: 140 },
-  welcomeKicker: { color: '#c1b4e6', fontSize: 10, fontWeight: '800', letterSpacing: 2.7 },
-  welcomeTitle: { color: colors.text, fontSize: 47, fontWeight: '700', letterSpacing: -2.3, lineHeight: 50, marginTop: 14 },
-  welcomeBody: { color: '#d2cedd', fontSize: 16, lineHeight: 24, marginTop: 18, maxWidth: 330 },
-  descentHint: { alignItems: 'center', flexDirection: 'row', justifyContent: 'center', marginTop: 16 },
-  descentLine: { backgroundColor: colors.gold, height: 1, marginRight: 10, opacity: 0.6, width: 24 },
-  descentText: { color: '#9690a6', fontSize: 9, fontWeight: '800', letterSpacing: 1.9 },
+  astrolabe: { alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  astrolabeGlow: { backgroundColor: 'rgba(177,151,93,0.012)', borderColor: 'rgba(223,202,146,0.06)', borderWidth: 1, position: 'absolute' },
+  astrolabeOuterRing: { borderColor: 'rgba(196,169,109,0.7)', borderWidth: 1, position: 'absolute' },
+  astrolabeInnerRing: { borderColor: 'rgba(196,169,109,0.34)', borderWidth: 1, position: 'absolute' },
+  astrolabeTick: { backgroundColor: 'rgba(196,169,109,0.38)', height: 1, position: 'absolute', width: 4 },
+  astrolabeTickMajor: { backgroundColor: '#bda468', width: 9 },
+  astrolabeInnerAxisOne: { backgroundColor: 'rgba(196,169,109,0.24)', height: 1, left: '8%', position: 'absolute', right: '8%', top: '50%', transform: [{ rotate: '27deg' }] },
+  astrolabeInnerAxisTwo: { backgroundColor: 'rgba(196,169,109,0.16)', bottom: '8%', left: '50%', position: 'absolute', top: '8%', transform: [{ rotate: '-27deg' }], width: 1 },
+  astrolabeCrossVertical: { backgroundColor: 'rgba(196,169,109,0.12)', position: 'absolute', width: 1 },
+  astrolabeCrossHorizontal: { backgroundColor: 'rgba(196,169,109,0.12)', height: 1, position: 'absolute' },
+  astrolabeCore: { alignItems: 'center', backgroundColor: '#08090a', borderColor: 'rgba(196,169,109,0.62)', borderWidth: 1, justifyContent: 'center', position: 'absolute' },
+  astrolabeSymbol: { color: '#cbb477', fontFamily: DISPLAY_FONT, fontWeight: '400' },
 
-  progressHeader: { alignItems: 'center', flexDirection: 'row', gap: 13, paddingHorizontal: 20, paddingVertical: 14, zIndex: 10 },
-  backButton: { alignItems: 'center', borderColor: 'rgba(233,216,166,0.35)', borderRadius: 18, borderWidth: 1, height: 36, justifyContent: 'center', width: 36 },
-  back: { color: colors.gold, fontSize: 18, fontWeight: '500' },
-  progressTrack: { backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 99, flex: 1, height: 2, overflow: 'hidden' },
-  progressFill: { backgroundColor: colors.gold, borderRadius: 99, height: 2 },
-  headerSign: { color: colors.gold, fontSize: 22, textAlign: 'center', width: 28 },
-  stepContent: { flexGrow: 1, paddingBottom: 30, paddingHorizontal: 24, paddingTop: 12 },
-  eyebrow: { color: '#b9a7ef', fontSize: 10, fontWeight: '800', letterSpacing: 2.6 },
-  questionTitle: { color: colors.text, fontSize: 36, fontWeight: '700', letterSpacing: -1.5, lineHeight: 40, marginTop: 10 },
-  questionDescription: { color: '#b7b2c2', fontSize: 15, lineHeight: 22, marginTop: 12, maxWidth: 355 },
+  welcomeContent: { flex: 1, justifyContent: 'space-between', paddingBottom: 26, paddingHorizontal: 26, paddingTop: 24 },
+  brandRow: { alignItems: 'center', borderBottomColor: 'rgba(255,255,255,0.1)', borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 15 },
+  brand: { color: '#d2bd86', fontSize: 12, fontWeight: '700', letterSpacing: 4.8 },
+  brandMeta: { color: '#676767', fontSize: 8, fontWeight: '700', letterSpacing: 1.25 },
+  welcomeCopy: { marginTop: 16 },
+  welcomeIndexRow: { alignItems: 'center', flexDirection: 'row', marginBottom: 24 },
+  welcomeIndex: { color: '#b49c64', fontFamily: DISPLAY_FONT, fontSize: 38, lineHeight: 40 },
+  welcomeIndexRule: { backgroundColor: 'rgba(196,169,109,0.42)', height: 1, marginHorizontal: 14, width: 44 },
+  welcomeIndexLabel: { color: '#747474', fontSize: 8, fontWeight: '700', letterSpacing: 2 },
+  welcomeTitle: { color: '#f0ede6', fontFamily: DISPLAY_FONT, fontSize: 52, fontWeight: '400', letterSpacing: -1.7, lineHeight: 55 },
+  welcomeBody: { color: '#989898', fontSize: 15, lineHeight: 23, marginTop: 22, maxWidth: 300 },
+  descentHint: { alignItems: 'center', flexDirection: 'row', justifyContent: 'center', marginTop: 15 },
+  descentDot: { backgroundColor: '#77705f', borderRadius: 2, height: 3, marginHorizontal: 10, width: 3 },
+  descentText: { color: '#666666', fontSize: 8, fontWeight: '700', letterSpacing: 1.6 },
+
+  progressHeader: { alignItems: 'center', flexDirection: 'row', gap: 14, paddingHorizontal: 24, paddingVertical: 15, zIndex: 10 },
+  backButton: { alignItems: 'flex-start', height: 30, justifyContent: 'center', width: 48 },
+  back: { color: '#8b8b88', fontSize: 8, fontWeight: '800', letterSpacing: 1.5 },
+  progressTrack: { backgroundColor: 'rgba(255,255,255,0.09)', flex: 1, height: 1, overflow: 'hidden' },
+  progressFill: { backgroundColor: '#b9a064', height: 1 },
+  headerSign: { color: '#8b8b88', fontSize: 8, fontWeight: '700', letterSpacing: 1, textAlign: 'right', width: 48 },
+  stepContent: { flexGrow: 1, paddingBottom: 30, paddingHorizontal: 26, paddingTop: 14 },
+  eyebrow: { color: '#a9915d', fontSize: 9, fontWeight: '800', letterSpacing: 2.4 },
+  questionTitle: { color: '#efede7', fontFamily: DISPLAY_FONT, fontSize: 42, fontWeight: '400', letterSpacing: -1.25, lineHeight: 45, marginTop: 11 },
+  questionDescription: { color: '#8d8d8b', fontSize: 14, lineHeight: 21, marginTop: 13, maxWidth: 340 },
   answerArea: { flex: 1, justifyContent: 'flex-end', minHeight: 440, paddingTop: 20 },
 
-  signPreview: { alignItems: 'center', alignSelf: 'center', backgroundColor: 'rgba(10,12,28,0.64)', borderColor: 'rgba(233,216,166,0.23)', borderRadius: 22, borderWidth: 1, flexDirection: 'row', marginBottom: 14, paddingHorizontal: 16, paddingVertical: 10 },
-  signPreviewSymbol: { color: colors.gold, fontSize: 29, marginRight: 12 },
-  signPreviewLabel: { color: '#8d8799', fontSize: 8, fontWeight: '800', letterSpacing: 1.6 },
-  signPreviewName: { color: colors.text, fontSize: 16, fontWeight: '700', marginTop: 2 },
-  wheelFrame: { backgroundColor: 'rgba(9,11,28,0.82)', borderColor: 'rgba(215,205,246,0.18)', borderRadius: 26, borderWidth: 1, flexDirection: 'row', height: 180, overflow: 'hidden', paddingHorizontal: 8, position: 'relative' },
+  signPreview: { alignItems: 'center', alignSelf: 'flex-start', borderLeftColor: '#b49b63', borderLeftWidth: 1, flexDirection: 'row', marginBottom: 16, paddingLeft: 13, paddingVertical: 3 },
+  signPreviewSymbol: { color: '#bda66e', fontFamily: DISPLAY_FONT, fontSize: 26, marginRight: 12 },
+  signPreviewLabel: { color: '#666664', fontSize: 7, fontWeight: '800', letterSpacing: 1.6 },
+  signPreviewName: { color: '#dedbd4', fontFamily: DISPLAY_FONT, fontSize: 17, marginTop: 1 },
+  wheelFrame: { backgroundColor: 'rgba(10,11,12,0.9)', borderBottomColor: 'rgba(255,255,255,0.14)', borderBottomWidth: 1, borderTopColor: 'rgba(255,255,255,0.14)', borderTopWidth: 1, flexDirection: 'row', height: 180, overflow: 'hidden', paddingHorizontal: 5, position: 'relative' },
   wheelContent: { paddingVertical: 65 },
   wheelItem: { alignItems: 'center', height: WHEEL_ITEM_HEIGHT, justifyContent: 'center', paddingHorizontal: 3 },
-  wheelItemText: { color: '#686579', fontSize: 16, fontWeight: '500' },
-  wheelItemTextSelected: { color: colors.text, fontSize: 18, fontWeight: '800' },
-  wheelFocus: { backgroundColor: 'rgba(215,205,246,0.08)', borderBottomColor: 'rgba(233,216,166,0.35)', borderBottomWidth: 1, borderTopColor: 'rgba(233,216,166,0.35)', borderTopWidth: 1, height: WHEEL_ITEM_HEIGHT, left: 10, position: 'absolute', right: 10, top: 65 },
+  wheelItemText: { color: '#4f4f4e', fontFamily: DISPLAY_FONT, fontSize: 16 },
+  wheelItemTextSelected: { color: '#e9e5db', fontSize: 19 },
+  wheelFocus: { backgroundColor: 'rgba(185,160,100,0.025)', borderBottomColor: 'rgba(185,160,100,0.32)', borderBottomWidth: 1, borderTopColor: 'rgba(185,160,100,0.32)', borderTopWidth: 1, height: WHEEL_ITEM_HEIGHT, left: 5, position: 'absolute', right: 5, top: 65 },
 
   orbitWrap: { alignItems: 'center', marginBottom: 8 },
-  timeDial: { alignItems: 'center', alignSelf: 'center', backgroundColor: 'rgba(8,10,26,0.68)', borderColor: 'rgba(215,205,246,0.33)', borderRadius: 126, borderWidth: 1, justifyContent: 'center', position: 'relative', shadowColor: '#8f78d4', shadowOffset: { height: 0, width: 0 }, shadowOpacity: 0.34, shadowRadius: 24 },
-  timeDialInner: { borderColor: 'rgba(233,216,166,0.22)', borderRadius: 83, borderWidth: 1, height: 166, position: 'absolute', width: 166 },
-  orbitVertical: { backgroundColor: 'rgba(255,255,255,0.08)', height: 166, position: 'absolute', width: 1 },
-  orbitHorizontal: { backgroundColor: 'rgba(255,255,255,0.08)', height: 1, position: 'absolute', width: 166 },
-  orbitMarker: { color: '#797386', fontSize: 7, fontWeight: '800', letterSpacing: 1, position: 'absolute' },
+  timeDial: { alignItems: 'center', alignSelf: 'center', backgroundColor: 'rgba(8,9,10,0.84)', borderColor: 'rgba(185,160,100,0.36)', borderRadius: 126, borderWidth: 1, justifyContent: 'center', position: 'relative' },
+  timeDialInner: { borderColor: 'rgba(255,255,255,0.11)', borderRadius: 83, borderWidth: 1, height: 166, position: 'absolute', width: 166 },
+  orbitVertical: { backgroundColor: 'rgba(255,255,255,0.055)', height: 166, position: 'absolute', width: 1 },
+  orbitHorizontal: { backgroundColor: 'rgba(255,255,255,0.055)', height: 1, position: 'absolute', width: 166 },
+  orbitMarker: { color: '#5c5c5a', fontSize: 6, fontWeight: '800', letterSpacing: 1.1, position: 'absolute' },
   orbitMarkerTop: { top: 14 },
   orbitMarkerRight: { right: 8, top: 121 },
   orbitMarkerBottom: { bottom: 14 },
   orbitMarkerLeft: { left: 9, top: 121 },
-  sunKnob: { alignItems: 'center', backgroundColor: '#cbb9ff', borderColor: '#fff3c8', borderRadius: 24, borderWidth: 1, height: 48, justifyContent: 'center', position: 'absolute', shadowColor: '#efd88e', shadowOffset: { height: 0, width: 0 }, shadowOpacity: 0.9, shadowRadius: 15, width: 48 },
-  sunCore: { backgroundColor: '#fff3c8', borderRadius: 9, height: 18, shadowColor: '#ffffff', shadowOffset: { height: 0, width: 0 }, shadowOpacity: 0.9, shadowRadius: 8, width: 18 },
+  sunKnob: { alignItems: 'center', backgroundColor: '#08090a', borderColor: '#c0a869', borderRadius: 24, borderWidth: 1, height: 48, justifyContent: 'center', position: 'absolute', width: 48 },
+  sunCore: { backgroundColor: '#bda467', borderRadius: 5, height: 10, width: 10 },
   timeCenter: { alignItems: 'center' },
-  timeValue: { color: colors.text, fontSize: 25, fontWeight: '800', letterSpacing: -0.8 },
-  timeWindow: { color: colors.gold, fontSize: 9, fontWeight: '800', letterSpacing: 1.5, marginTop: 4, textTransform: 'uppercase' },
+  timeValue: { color: '#e8e4dc', fontFamily: DISPLAY_FONT, fontSize: 28, letterSpacing: -0.5 },
+  timeWindow: { color: '#9e8856', fontSize: 8, fontWeight: '800', letterSpacing: 1.5, marginTop: 3, textTransform: 'uppercase' },
 
-  globeStage: { alignItems: 'center', alignSelf: 'center', height: 220, justifyContent: 'center', marginBottom: 2, width: 280 },
-  globeHalo: { backgroundColor: 'rgba(125,100,203,0.18)', borderRadius: 100, height: 198, position: 'absolute', shadowColor: '#af96ef', shadowOffset: { height: 0, width: 0 }, shadowOpacity: 0.7, shadowRadius: 34, width: 198 },
-  globe: { backgroundColor: '#151a3a', borderColor: 'rgba(233,216,166,0.55)', borderRadius: 86, borderWidth: 1, height: 172, overflow: 'hidden', position: 'relative', width: 172 },
-  globeShade: { backgroundColor: 'rgba(5,7,20,0.46)', borderRadius: 90, bottom: -20, height: 185, position: 'absolute', right: -55, width: 130 },
-  globeLatitude: { borderColor: 'rgba(215,205,246,0.2)', borderRadius: 80, borderWidth: 1, height: 38, left: 8, position: 'absolute', right: 8 },
-  globeMeridian: { borderColor: 'rgba(215,205,246,0.18)', borderRadius: 80, borderWidth: 1, bottom: 5, left: 58, position: 'absolute', top: 5, width: 55 },
-  continentGroup: { ...StyleSheet.absoluteFillObject },
-  continent: { backgroundColor: 'rgba(218,199,143,0.55)', position: 'absolute' },
-  continentOne: { borderBottomLeftRadius: 18, borderTopRightRadius: 22, height: 38, left: 35, top: 38, transform: [{ rotate: '-18deg' }], width: 52 },
-  continentTwo: { borderBottomRightRadius: 20, borderTopLeftRadius: 18, height: 48, right: 23, top: 79, transform: [{ rotate: '26deg' }], width: 37 },
-  continentThree: { borderRadius: 20, bottom: 24, height: 26, left: 49, transform: [{ rotate: '12deg' }], width: 34 },
-  globeHighlight: { backgroundColor: 'rgba(255,255,255,0.26)', borderRadius: 20, height: 35, left: 29, position: 'absolute', top: 25, transform: [{ rotate: '-30deg' }], width: 13 },
-  globeOrbit: { borderColor: 'rgba(233,216,166,0.43)', borderRadius: 120, borderWidth: 1, height: 108, position: 'absolute', transform: [{ rotate: '12deg' }], width: 255 },
-  globeSatellite: { backgroundColor: colors.gold, borderRadius: 5, height: 10, left: 8, position: 'absolute', top: 16, width: 10 },
-  placeField: { alignItems: 'center', backgroundColor: 'rgba(9,11,28,0.84)', borderColor: 'rgba(215,205,246,0.24)', borderRadius: 18, borderWidth: 1, flexDirection: 'row', paddingHorizontal: 16 },
-  placePin: { color: colors.gold, fontSize: 20, marginRight: 10 },
-  placeInput: { color: colors.text, flex: 1, fontSize: 17, paddingVertical: 16 },
+  coordinateStage: { alignSelf: 'center', backgroundColor: 'rgba(8,9,10,0.62)', borderColor: 'rgba(255,255,255,0.11)', borderWidth: 1, height: 176, marginBottom: 14, overflow: 'hidden', position: 'relative', width: '100%' },
+  coordinateHorizontal: { backgroundColor: 'rgba(255,255,255,0.045)', height: 1, left: 0, position: 'absolute', right: 0 },
+  coordinateVertical: { backgroundColor: 'rgba(255,255,255,0.045)', bottom: 0, position: 'absolute', top: 0, width: 1 },
+  coordinateOrbitOuter: { borderColor: 'rgba(185,160,100,0.28)', borderRadius: 70, borderWidth: 1, height: 140, left: '50%', marginLeft: -70, marginTop: -70, position: 'absolute', top: '50%', width: 140 },
+  coordinateOrbitInner: { borderColor: 'rgba(255,255,255,0.1)', borderRadius: 43, borderWidth: 1, height: 86, left: '50%', marginLeft: -43, marginTop: -43, position: 'absolute', top: '50%', width: 86 },
+  coordinateCrossHorizontal: { backgroundColor: 'rgba(185,160,100,0.3)', height: 1, left: '28%', position: 'absolute', right: '28%', top: '50%' },
+  coordinateCrossVertical: { backgroundColor: 'rgba(185,160,100,0.3)', bottom: '18%', left: '50%', position: 'absolute', top: '18%', width: 1 },
+  coordinateTarget: { backgroundColor: '#b9a064', borderRadius: 3, height: 5, left: '50%', marginLeft: -2.5, marginTop: -2.5, position: 'absolute', top: '50%', width: 5 },
+  coordinateScan: { backgroundColor: 'rgba(185,160,100,0.2)', bottom: 0, left: '50%', position: 'absolute', top: 0, width: 1 },
+  coordinateLabelLeft: { bottom: 8, color: '#555553', fontSize: 6, fontWeight: '700', left: 9, letterSpacing: 1.3, position: 'absolute' },
+  coordinateLabelRight: { bottom: 8, color: '#555553', fontSize: 6, fontWeight: '700', letterSpacing: 1.3, position: 'absolute', right: 9 },
+  placeField: { alignItems: 'center', backgroundColor: 'rgba(8,9,10,0.9)', borderBottomColor: 'rgba(255,255,255,0.18)', borderBottomWidth: 1, flexDirection: 'row', paddingHorizontal: 4 },
+  placePin: { color: '#9f8958', fontSize: 16, marginRight: 10 },
+  placeInput: { color: '#e7e3db', flex: 1, fontSize: 16, paddingVertical: 15 },
   citySuggestions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 10 },
-  cityChip: { backgroundColor: 'rgba(16,19,42,0.82)', borderColor: 'rgba(255,255,255,0.12)', borderRadius: 99, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 8 },
-  cityChipText: { color: '#c9c4d2', fontSize: 12, fontWeight: '600' },
+  cityChip: { borderColor: 'rgba(255,255,255,0.11)', borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 },
+  cityChipText: { color: '#888886', fontSize: 10, fontWeight: '700', letterSpacing: 0.4 },
 
   revealContent: { flex: 1, justifyContent: 'flex-end', paddingBottom: 24, paddingHorizontal: 22 },
   revealTop: { alignItems: 'center', flex: 1, justifyContent: 'center', paddingTop: 10 },
-  revealEyebrow: { color: '#d7c894', fontSize: 10, fontWeight: '800', letterSpacing: 2.6, marginBottom: 16 },
-  revealSymbolWrap: { alignItems: 'center', backgroundColor: 'rgba(7,8,20,0.62)', borderColor: 'rgba(233,216,166,0.6)', borderRadius: 74, borderWidth: 1, height: 148, justifyContent: 'center', shadowColor: '#bda1ff', shadowOffset: { height: 0, width: 0 }, shadowOpacity: 0.65, shadowRadius: 28, width: 148 },
-  revealSymbol: { color: '#f3df9c', fontSize: 78, textShadowColor: 'rgba(242,222,156,0.7)', textShadowOffset: { height: 0, width: 0 }, textShadowRadius: 20 },
-  revealCard: { backgroundColor: 'rgba(8,10,25,0.88)', borderColor: 'rgba(233,216,166,0.25)', borderRadius: 28, borderWidth: 1, padding: 21 },
-  revealIntro: { color: '#a7a1b1', fontSize: 13, textAlign: 'center' },
-  revealName: { color: colors.text, fontSize: 34, fontWeight: '800', letterSpacing: -1.2, marginTop: 2, textAlign: 'center' },
-  revealMeta: { color: colors.gold, fontSize: 11, fontWeight: '700', letterSpacing: 1, marginTop: 5, textAlign: 'center', textTransform: 'uppercase' },
-  divider: { backgroundColor: 'rgba(255,255,255,0.12)', height: 1, marginVertical: 14 },
+  revealEyebrow: { color: '#a8905b', fontSize: 9, fontWeight: '800', letterSpacing: 2.4, marginBottom: 18 },
+  revealCard: { borderTopColor: 'rgba(185,160,100,0.34)', borderTopWidth: 1, paddingHorizontal: 2, paddingTop: 20 },
+  revealIntro: { color: '#777775', fontSize: 11, letterSpacing: 0.4, textAlign: 'center' },
+  revealName: { color: '#efebe3', fontFamily: DISPLAY_FONT, fontSize: 43, fontWeight: '400', letterSpacing: -1, marginTop: 1, textAlign: 'center' },
+  revealMeta: { color: '#a38c59', fontSize: 9, fontWeight: '700', letterSpacing: 1.3, marginTop: 5, textAlign: 'center', textTransform: 'uppercase' },
+  divider: { backgroundColor: 'rgba(255,255,255,0.1)', height: 1, marginVertical: 14 },
   profileLine: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, width: '100%' },
   profileLabel: { color: '#777386', fontSize: 12 },
   profileValue: { color: '#ded9e5', flex: 1, fontSize: 12, fontWeight: '600', marginLeft: 20, textAlign: 'right' },
 
-  primaryButton: { alignItems: 'center', backgroundColor: '#f3eee4', borderRadius: 20, flexDirection: 'row', justifyContent: 'space-between', marginTop: 18, minHeight: 58, paddingLeft: 20, paddingRight: 9 },
+  primaryButton: { alignItems: 'center', backgroundColor: '#e8e4db', flexDirection: 'row', justifyContent: 'space-between', marginTop: 18, minHeight: 56, paddingHorizontal: 18 },
   primaryButtonPressed: { opacity: 0.86, transform: [{ scale: 0.99 }] },
-  primaryButtonLabel: { color: '#111224', fontSize: 15, fontWeight: '800' },
-  buttonOrb: { alignItems: 'center', backgroundColor: '#17172b', borderRadius: 20, height: 40, justifyContent: 'center', width: 40 },
-  primaryButtonArrow: { color: colors.gold, fontSize: 19, fontWeight: '600' },
+  primaryButtonLabel: { color: '#111212', fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+  primaryButtonArrow: { color: '#111212', fontSize: 18, fontWeight: '400' },
   textButton: { alignItems: 'center', padding: 13 },
   textButtonLabel: { color: '#aaa4b5', fontSize: 13, fontWeight: '600' },
 });
