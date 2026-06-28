@@ -7,9 +7,21 @@ A local-first Expo React Native app built with TypeScript. The current build inc
 - Birth date and birthplace collection
 - Automatic sun-sign calculation
 - Three local readings throughout the day
-- On-device profile persistence with AsyncStorage
+- Encrypted on-device profile persistence with Expo SecureStore
 
-The current build contains no login, payment flow, AI integration, or backend. See `PRODUCT_PLAN.md` for the staged production architecture and iOS widget plan.
+The current build contains no login, payment flow, or AI integration. The remote content service is optional; without configuration, bundled readings keep the app fully functional. See `PRODUCT_PLAN.md` for the staged production architecture and iOS widget plan.
+
+## Optional content service
+
+The app runs entirely from bundled readings when no server is configured. To connect a Supabase project:
+
+1. Run `supabase/migrations/202606280001_create_daily_messages.sql` in the Supabase SQL editor.
+2. Run `supabase/seed.sql` to create today's three readings for all signs.
+3. Copy `.env.example` to `.env.local`.
+4. Add the project URL and **publishable** key from the Supabase Connect dialog.
+5. Restart Expo with `npm start -- --clear`.
+
+Never put a Supabase secret key in the app. Mobile environment variables are public in the compiled bundle. The database migration grants clients read-only access to published messages and enables Row Level Security.
 
 ## Run locally
 

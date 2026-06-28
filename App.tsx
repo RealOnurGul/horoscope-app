@@ -1,13 +1,11 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet } from 'react-native';
 
 import { HomeScreen } from './src/screens/HomeScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
+import { deleteProfile, loadProfile, saveProfile } from './src/services/profileStorage';
 import { AppProfile } from './src/types/profile';
-
-const PROFILE_KEY = '@horoscope/profile-v2';
 
 export default function App() {
   const [profile, setProfile] = useState<AppProfile | null>(null);
@@ -16,8 +14,7 @@ export default function App() {
   useEffect(() => {
     async function restoreProfile() {
       try {
-        const savedProfile = await AsyncStorage.getItem(PROFILE_KEY);
-        setProfile(savedProfile ? (JSON.parse(savedProfile) as AppProfile) : null);
+        setProfile(await loadProfile());
       } catch (error) {
         console.warn('The saved profile could not be loaded.', error);
       } finally {
@@ -30,11 +27,11 @@ export default function App() {
 
   async function completeOnboarding(newProfile: AppProfile) {
     setProfile(newProfile);
-    await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(newProfile));
+    await saveProfile(newProfile);
   }
 
   async function resetProfile() {
-    await AsyncStorage.removeItem(PROFILE_KEY);
+    await deleteProfile();
     setProfile(null);
   }
 

@@ -15,13 +15,15 @@ The daily experience contains three editorial readings:
 Status: implemented in the current Expo Go build.
 
 - Four-step onboarding
-- Local profile storage
+- Encrypted local profile storage
 - Sun-sign calculation
 - Three time-based mock readings
 - Polished celestial visual system
 - No account or server dependency
 
 ## Phase 2 — production content service
+
+Status: client, offline cache, schema, and sample content implemented. A hosted Supabase project still needs to be created and connected with `.env.local` values.
 
 Use a small hosted PostgreSQL service such as Supabase. Authentication is not required initially. The app should send only the minimum delivery context, not the user's full birth details.
 

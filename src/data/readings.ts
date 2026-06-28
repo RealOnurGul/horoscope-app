@@ -9,6 +9,15 @@ export type DailyReading = {
   availableHour: number;
 };
 
+export type ReadingSource = 'remote' | 'cache' | 'fallback';
+
+export type DailyReadingBundle = {
+  date: string;
+  readings: DailyReading[];
+  signId: string;
+  source: ReadingSource;
+};
+
 const elementGuidance: Record<ZodiacSign['element'], string> = {
   Fire: 'Put your energy behind one clear intention instead of scattering it across every possibility.',
   Earth: 'A practical choice creates more peace than another round of overthinking.',
