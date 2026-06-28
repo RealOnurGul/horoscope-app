@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Horoscope",
+    "slug": "horoscope-app",
+    "scheme": "horoscope",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "backgroundColor": "#070914",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    }
+  }
+}
