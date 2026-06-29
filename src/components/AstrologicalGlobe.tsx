@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import * as THREE from 'three';
 
+import worldBoundaryLines from '../data/worldBoundaries.json';
+
 import {
   GlobeSelection,
   findNearestMajorCity,
@@ -36,7 +38,7 @@ type GestureState = {
   velocityLongitude: number;
 };
 
-const MIN_CAMERA_DISTANCE = 1.72;
+const MIN_CAMERA_DISTANCE = 1.18;
 const MAX_CAMERA_DISTANCE = 3.7;
 
 export function AstrologicalGlobe({
@@ -73,7 +75,7 @@ export function AstrologicalGlobe({
 
   function emitSelection(force = false) {
     const now = Date.now();
-    if (!force && now - lastSelectionTime.current < 140) return;
+    if (!force && now - lastSelectionTime.current < 360) return;
     lastSelectionTime.current = now;
     const nextSelection = findNearestMajorCity(latitude.current, longitude.current);
     setSelection(nextSelection);
@@ -124,7 +126,7 @@ export function AstrologicalGlobe({
         const elapsed = Math.max(8, now - gesture.current.lastTime);
         const deltaX = touch.pageX - gesture.current.lastX;
         const deltaY = touch.pageY - gesture.current.lastY;
-        const sensitivity = 0.24 * (cameraDistance.current / 2.65);
+        const sensitivity = 0.32 * (cameraDistance.current / 2.65);
         const latitudeDelta = deltaY * sensitivity;
         const longitudeDelta = -deltaX * sensitivity;
 
@@ -146,6 +148,8 @@ export function AstrologicalGlobe({
         isDragging.current = false;
         emitSelection(true);
       },
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
       onStartShouldSetPanResponder: () => true,
     }),
     [onSelectionChange],
@@ -153,7 +157,7 @@ export function AstrologicalGlobe({
 
   async function createScene(gl: ExpoWebGLRenderingContext) {
     const renderer = createRenderer(gl);
-    renderer.setClearColor(0x060708, 1);
+    renderer.setClearColor(0x000000, 0);
     renderer.setPixelRatio(1);
     renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight, false);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -174,7 +178,7 @@ export function AstrologicalGlobe({
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 
-    const earthGeometry = new THREE.SphereGeometry(1, 96, 64);
+    const earthGeometry = new THREE.SphereGeometry(1, 64, 48);
     const earthMaterial = new THREE.MeshStandardMaterial({
       map: texture,
       metalness: 0.02,
@@ -190,6 +194,14 @@ export function AstrologicalGlobe({
       wireframe: true,
     });
     earthGroup.add(new THREE.Mesh(coordinateGeometry, coordinateMaterial));
+
+    const boundaryGeometry = createBoundaryGeometry();
+    const boundaryMaterial = new THREE.LineBasicMaterial({
+      color: 0xe0c27b,
+      opacity: 0.78,
+      transparent: true,
+    });
+    earthGroup.add(new THREE.LineSegments(boundaryGeometry, boundaryMaterial));
 
     const atmosphereGeometry = new THREE.SphereGeometry(1.055, 64, 48);
     const atmosphereMaterial = new THREE.ShaderMaterial({
@@ -299,7 +311,7 @@ export function AstrologicalGlobe({
         <View style={styles.targetCenter} />
       </View>
 
-      <Text pointerEvents="none" style={styles.attribution}>EARTH  /  NASA    CITIES  /  GEONAMES</Text>
+      <Text pointerEvents="none" style={styles.attribution}>EARTH / NASA   BORDERS / NATURAL EARTH   CITIES / GEONAMES</Text>
 
       <View style={styles.zoomControls}>
         <Pressable accessibilityLabel="Zoom in" onPress={() => changeZoom(-0.35)} style={styles.zoomButton}>
@@ -357,6 +369,24 @@ function clamp(value: number, minimum: number, maximum: number) {
   return Math.max(minimum, Math.min(maximum, value));
 }
 
+function createBoundaryGeometry() {
+  const positions: number[] = [];
+  const start = new THREE.Vector3();
+  const end = new THREE.Vector3();
+
+  for (const line of worldBoundaryLines as number[][]) {
+    for (let index = 0; index <= line.length - 4; index += 2) {
+      latLonToVector(line[index + 1] / 100, line[index] / 100, start).multiplyScalar(1.012);
+      latLonToVector(line[index + 3] / 100, line[index + 2] / 100, end).multiplyScalar(1.012);
+      positions.push(start.x, start.y, start.z, end.x, end.y, end.z);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  return geometry;
+}
+
 function createRenderer(gl: ExpoWebGLRenderingContext) {
   const canvas = {
     addEventListener: () => undefined,
@@ -394,8 +424,8 @@ async function createExpoTexture(moduleReference: number) {
 }
 
 const styles = StyleSheet.create({
-  frame: { alignSelf: 'center', backgroundColor: '#060708', overflow: 'hidden', position: 'relative' },
-  loading: { ...StyleSheet.absoluteFillObject, alignItems: 'center', backgroundColor: '#060708', justifyContent: 'center' },
+  frame: { alignSelf: 'center', backgroundColor: 'transparent', overflow: 'hidden', position: 'relative' },
+  loading: { ...StyleSheet.absoluteFillObject, alignItems: 'center', backgroundColor: 'rgba(6,7,8,0.82)', justifyContent: 'center' },
   loadingText: { color: '#66635b', fontSize: 7, fontWeight: '800', letterSpacing: 1.5, marginTop: 10 },
   target: { alignItems: 'center', height: 80, justifyContent: 'center', left: '50%', marginLeft: -40, marginTop: -40, position: 'absolute', top: '50%', width: 80 },
   targetOuter: { borderColor: 'rgba(219,188,113,0.55)', borderRadius: 30, borderWidth: 1, height: 60, position: 'absolute', width: 60 },
@@ -408,7 +438,7 @@ const styles = StyleSheet.create({
   zoomButton: { alignItems: 'center', height: 34, justifyContent: 'center', width: 34 },
   zoomButtonText: { color: '#c7ae70', fontFamily: 'Georgia', fontSize: 20, fontWeight: '300', lineHeight: 22 },
   zoomDivider: { backgroundColor: 'rgba(255,255,255,0.12)', height: 1, marginHorizontal: 6 },
-  readout: { backgroundColor: 'rgba(6,7,8,0.86)', bottom: 0, left: 0, paddingHorizontal: 13, paddingVertical: 11, position: 'absolute', right: 0 },
+  readout: { backgroundColor: 'rgba(6,7,8,0.48)', borderTopColor: 'rgba(224,194,123,0.22)', borderTopWidth: 1, bottom: 0, left: 0, paddingHorizontal: 13, paddingVertical: 11, position: 'absolute', right: 0 },
   readoutLabel: { color: '#77736a', fontSize: 6, fontWeight: '800', letterSpacing: 1.45 },
   readoutCity: { color: '#eee9df', fontFamily: 'Georgia', fontSize: 17, marginTop: 2 },
   readoutCoordinates: { color: '#8d7b51', fontSize: 7, fontWeight: '700', letterSpacing: 0.75, marginTop: 3 },

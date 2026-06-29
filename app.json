@@ -5,8 +5,8 @@
     "scheme": "horoscope",
     "version": "1.0.0",
     "orientation": "portrait",
-    "backgroundColor": "#070914",
-    "userInterfaceStyle": "light",
+    "backgroundColor": "#060708",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "plugins": [
       "expo-secure-store",

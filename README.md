@@ -5,7 +5,7 @@ A local-first Expo React Native app built with TypeScript. The current build inc
 - A premium, four-step birth-profile onboarding
 - Optional estimated birth-time interaction
 - Birth date and birthplace collection
-- Interactive 3D Earth birthplace targeting with inertial rotation, pinch zoom, and offline nearest-city matching
+- Interactive 3D Earth birthplace targeting with inertial rotation, deep pinch zoom, country/coastline overlays, and offline nearest-city matching
 - Automatic sun-sign calculation
 - Three local readings throughout the day
 - Encrypted on-device profile persistence with Expo SecureStore

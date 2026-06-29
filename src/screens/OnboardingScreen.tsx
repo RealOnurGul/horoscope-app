@@ -41,7 +41,10 @@ const DISPLAY_FONT = Platform.select({ android: 'serif', default: 'serif', ios: 
 const ZODIAC_GLYPHS = ['♈︎', '♉︎', '♊︎', '♋︎', '♌︎', '♍︎', '♎︎', '♏︎', '♐︎', '♑︎', '♒︎', '♓︎'];
 
 export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
+  const { height: windowHeight } = useWindowDimensions();
   const [step, setStep] = useState(0);
+  const [transitionTarget, setTransitionTarget] = useState<number | null>(null);
+  const [sceneHeight, setSceneHeight] = useState(windowHeight - 60);
   const [month, setMonth] = useState(5);
   const [day, setDay] = useState(14);
   const [year, setYear] = useState(CURRENT_YEAR - 25);
@@ -50,9 +53,8 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   const [birthTimeWindow, setBirthTimeWindow] = useState<BirthTimeWindow | null>('Afternoon');
   const [birthPlace, setBirthPlace] = useState('');
   const [birthCoordinates, setBirthCoordinates] = useState<Coordinates | null>(null);
-  const sceneY = useRef(new Animated.Value(0)).current;
-  const sceneOpacity = useRef(new Animated.Value(1)).current;
-  const sceneScale = useRef(new Animated.Value(1)).current;
+  const verticalProgress = useRef(new Animated.Value(0)).current;
+  const transitionDirection = useRef<1 | -1>(1);
   const isTransitioning = useRef(false);
 
   const maxDay = useMemo(() => new Date(year, month, 0).getDate(), [month, year]);
@@ -67,26 +69,20 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   function transitionTo(nextStep: number) {
     if (isTransitioning.current || nextStep === step || nextStep < 0 || nextStep > TOTAL_STEPS) return;
     isTransitioning.current = true;
-    const direction = nextStep > step ? -1 : 1;
+    transitionDirection.current = nextStep > step ? 1 : -1;
+    verticalProgress.setValue(0);
+    setTransitionTarget(nextStep);
 
-    Animated.parallel([
-      Animated.timing(sceneY, {
-        duration: 210,
+    requestAnimationFrame(() => {
+      Animated.timing(verticalProgress, {
+        duration: 680,
         easing: Easing.inOut(Easing.cubic),
-        toValue: direction * 30,
+        toValue: 1,
         useNativeDriver: true,
-      }),
-      Animated.timing(sceneOpacity, { duration: 180, toValue: 0, useNativeDriver: true }),
-      Animated.timing(sceneScale, { duration: 210, toValue: 0.985, useNativeDriver: true }),
-    ]).start(() => {
-      setStep(nextStep);
-      sceneY.setValue(-direction * 38);
-      sceneScale.setValue(0.99);
-      Animated.parallel([
-        Animated.spring(sceneY, { damping: 24, mass: 0.75, stiffness: 145, toValue: 0, useNativeDriver: true }),
-        Animated.timing(sceneOpacity, { duration: 300, toValue: 1, useNativeDriver: true }),
-        Animated.spring(sceneScale, { damping: 22, stiffness: 160, toValue: 1, useNativeDriver: true }),
-      ]).start(() => {
+      }).start(() => {
+        setStep(nextStep);
+        setTransitionTarget(null);
+        verticalProgress.setValue(0);
         isTransitioning.current = false;
       });
     });
@@ -115,74 +111,123 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     });
   }
 
+  function renderStep(stepNumber: number) {
+    if (stepNumber === 0) return <WelcomeStep onContinue={() => transitionTo(1)} />;
+    if (stepNumber === 1) {
+      return (
+        <DateWheelStep
+          day={Math.min(day, maxDay)}
+          days={days}
+          month={month}
+          onDayChange={setDay}
+          onMonthChange={setMonth}
+          onYearChange={setYear}
+          onContinue={() => transitionTo(2)}
+          signName={sign.name}
+          signSymbol={sign.symbol}
+          year={year}
+        />
+      );
+    }
+    if (stepNumber === 2) {
+      return (
+        <TimeOrbitStep
+          hour={birthHour}
+          minute={birthMinute}
+          onChange={updateBirthTime}
+          onContinue={() => transitionTo(3)}
+          value={birthTimeWindow}
+        />
+      );
+    }
+    if (stepNumber === 3) {
+      return (
+        <PlaceGlobeStep
+          onContinue={() => transitionTo(4)}
+          onSkip={() => {
+            setBirthCoordinates(null);
+            setBirthPlace('');
+            transitionTo(4);
+          }}
+          onSelection={(selection) => {
+            setBirthCoordinates({ latitude: selection.latitude, longitude: selection.longitude });
+            setBirthPlace(`${selection.city.name}, ${selection.city.country}`);
+          }}
+          value={birthPlace}
+        />
+      );
+    }
+
+    return (
+      <RevealStep
+        birthDate={birthDate}
+        birthPlace={birthPlace}
+        birthHour={birthHour}
+        birthMinute={birthMinute}
+        birthTimeWindow={birthTimeWindow}
+        onFinish={() => void finish()}
+        sign={sign}
+      />
+    );
+  }
+
   return (
     <View style={styles.background}>
-      <CosmicBackdrop reveal={step === 4} />
+      <CosmicBackdrop reveal={(transitionTarget ?? step) === 4} />
 
-      {step > 0 ? (
-        <ProgressHeader
-          currentStep={step}
-          onBack={() => transitionTo(step - 1)}
-        />
-      ) : null}
+      <View style={styles.progressSlot}>
+        {(transitionTarget ?? step) > 0 ? (
+          <ProgressHeader
+            currentStep={transitionTarget ?? step}
+            onBack={() => transitionTo(step - 1)}
+          />
+        ) : null}
+      </View>
 
-      <Animated.View
-        style={[
-          styles.scene,
-          { opacity: sceneOpacity, transform: [{ translateY: sceneY }, { scale: sceneScale }] },
-        ]}
+      <View
+        onLayout={(event) => setSceneHeight(event.nativeEvent.layout.height)}
+        style={styles.sceneViewport}
       >
-        {step === 0 ? <WelcomeStep onContinue={() => transitionTo(1)} /> : null}
-        {step === 1 ? (
-          <DateWheelStep
-            day={Math.min(day, maxDay)}
-            days={days}
-            month={month}
-            onDayChange={setDay}
-            onMonthChange={setMonth}
-            onYearChange={setYear}
-            onContinue={() => transitionTo(2)}
-            signName={sign.name}
-            signSymbol={sign.symbol}
-            year={year}
-          />
+        <Animated.View
+          pointerEvents={transitionTarget === null ? 'auto' : 'none'}
+          style={[
+            styles.transitionScene,
+            transitionTarget !== null && {
+              transform: [{
+                translateY: verticalProgress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, -transitionDirection.current * sceneHeight],
+                }),
+              }],
+            },
+          ]}
+        >
+          {renderStep(step)}
+        </Animated.View>
+
+        {transitionTarget !== null ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.transitionScene,
+              {
+                transform: [{
+                  translateY: verticalProgress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [transitionDirection.current * sceneHeight, 0],
+                  }),
+                }],
+              },
+            ]}
+          >
+            {renderStep(transitionTarget)}
+          </Animated.View>
         ) : null}
-        {step === 2 ? (
-          <TimeOrbitStep
-            hour={birthHour}
-            minute={birthMinute}
-            onChange={updateBirthTime}
-            onContinue={() => transitionTo(3)}
-            value={birthTimeWindow}
-          />
+
+        {transitionTarget !== null ? (
+          <DepthTrails direction={transitionDirection.current} progress={verticalProgress} />
         ) : null}
-        {step === 3 ? (
-          <PlaceGlobeStep
-            onContinue={() => transitionTo(4)}
-            onSkip={() => {
-              setBirthCoordinates(null);
-              setBirthPlace('');
-              transitionTo(4);
-            }}
-            onSelection={(selection) => {
-              setBirthCoordinates({ latitude: selection.latitude, longitude: selection.longitude });
-              setBirthPlace(`${selection.city.name}, ${selection.city.country}`);
-            }}
-            value={birthPlace}
-          />
-        ) : null}
-        {step === 4 ? (
-          <RevealStep
-            birthDate={birthDate}
-            birthPlace={birthPlace}
-            birthHour={birthHour}
-            birthMinute={birthMinute}
-            birthTimeWindow={birthTimeWindow}
-            onFinish={() => void finish()}
-            sign={sign}
-          />
-        ) : null}
-      </Animated.View>
+      </View>
     </View>
   );
 }
@@ -751,6 +796,40 @@ function ProgressHeader({
   );
 }
 
+function DepthTrails({
+  direction,
+  progress,
+}: {
+  direction: 1 | -1;
+  progress: Animated.Value;
+}) {
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {[0, 1, 2, 3, 4, 5, 6].map((index) => (
+        <Animated.View
+          key={index}
+          style={[
+            styles.depthTrail,
+            {
+              left: `${9 + index * 14}%`,
+              opacity: progress.interpolate({
+                inputRange: [0, 0.18, 0.72, 1],
+                outputRange: [0, 0.38, 0.22, 0],
+              }),
+              transform: [{
+                translateY: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [direction * 260 + index * 18, -direction * 460 - index * 22],
+                }),
+              }],
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
 function CosmicBackdrop({ reveal }: { reveal: boolean }) {
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -898,7 +977,10 @@ function toStoredTime(hour: number, minute: number) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   background: { backgroundColor: '#060708', flex: 1, overflow: 'hidden' },
-  scene: { flex: 1 },
+  progressSlot: { height: 60, zIndex: 20 },
+  sceneViewport: { flex: 1, overflow: 'hidden', position: 'relative' },
+  transitionScene: { ...StyleSheet.absoluteFillObject },
+  depthTrail: { backgroundColor: 'rgba(218,202,163,0.72)', borderRadius: 2, height: 110, position: 'absolute', top: '50%', width: 1 },
   star: { backgroundColor: '#d9c89f', borderRadius: 99, opacity: 0.28, position: 'absolute' },
   backdropGlow: { borderWidth: 1, position: 'absolute', shadowOffset: { height: 0, width: 0 } },
   backdropGlowTop: { backgroundColor: 'rgba(168,145,94,0.025)', borderColor: 'rgba(203,181,128,0.09)', borderRadius: 230, height: 460, right: -240, shadowColor: '#b49b66', shadowOpacity: 0.06, shadowRadius: 70, top: -170, width: 460 },
