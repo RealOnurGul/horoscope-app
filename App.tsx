@@ -58,12 +58,12 @@ export default function App() {
 
 const styles = StyleSheet.create({
   app: {
-    backgroundColor: '#070914',
+    backgroundColor: '#060708',
     flex: 1,
   },
   loading: {
     alignItems: 'center',
-    backgroundColor: '#070914',
+    backgroundColor: '#060708',
     flex: 1,
     justifyContent: 'center',
   },

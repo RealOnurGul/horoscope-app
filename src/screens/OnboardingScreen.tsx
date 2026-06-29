@@ -666,7 +666,13 @@ function PlaceGlobeStep({
   value: string;
 }) {
   const { height, width } = useWindowDimensions();
-  const globeSize = Math.min(width - 36, height < 740 ? 310 : height < 850 ? 350 : 382);
+  const [globeArea, setGlobeArea] = useState({ height: 0, width: 0 });
+  const maximumGlobeSize = width >= 430 ? 370 : width >= 390 ? 350 : 326;
+  const globeSize = Math.floor(Math.min(
+    globeArea.width || width - 36,
+    globeArea.height ? Math.max(270, globeArea.height - 104) : height < 740 ? 300 : 340,
+    maximumGlobeSize,
+  ));
 
   return (
     <View style={styles.placeStepContent}>
@@ -678,7 +684,17 @@ function PlaceGlobeStep({
         </Text>
       </View>
 
-      <View style={styles.placeGlobeArea}>
+      <View
+        onLayout={(event) => {
+          const { height: areaHeight, width: areaWidth } = event.nativeEvent.layout;
+          setGlobeArea((current) => (
+            current.height === areaHeight && current.width === areaWidth
+              ? current
+              : { height: areaHeight, width: areaWidth }
+          ));
+        }}
+        style={styles.placeGlobeArea}
+      >
         <AstrologicalGlobe onSelectionChange={onSelection} size={globeSize} />
 
         <View>

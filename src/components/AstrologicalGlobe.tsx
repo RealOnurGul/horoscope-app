@@ -39,7 +39,8 @@ type GestureState = {
 };
 
 const MIN_CAMERA_DISTANCE = 1.18;
-const MAX_CAMERA_DISTANCE = 3.7;
+const MAX_CAMERA_DISTANCE = 4.2;
+const INITIAL_CAMERA_DISTANCE = 3.15;
 
 export function AstrologicalGlobe({
   initialLatitude = 20,
@@ -49,7 +50,7 @@ export function AstrologicalGlobe({
 }: AstrologicalGlobeProps) {
   const latitude = useRef(initialLatitude);
   const longitude = useRef(initialLongitude);
-  const cameraDistance = useRef(2.65);
+  const cameraDistance = useRef(INITIAL_CAMERA_DISTANCE);
   const isDragging = useRef(false);
   const animationFrame = useRef<number | null>(null);
   const mounted = useRef(true);
@@ -293,34 +294,36 @@ export function AstrologicalGlobe({
 
   return (
     <View style={[styles.frame, { height: size, width: size }]}>
-      <GLView msaaSamples={4} onContextCreate={(gl) => void handleContextCreate(gl)} style={StyleSheet.absoluteFill} />
-      <View accessibilityLabel="Rotate and pinch the Earth" {...panResponder.panHandlers} style={StyleSheet.absoluteFill} />
+      <View style={styles.globeViewport}>
+        <GLView msaaSamples={4} onContextCreate={(gl) => void handleContextCreate(gl)} style={StyleSheet.absoluteFill} />
+        <View accessibilityLabel="Rotate and pinch the Earth" {...panResponder.panHandlers} style={StyleSheet.absoluteFill} />
 
-      {!isReady ? (
-        <View style={styles.loading}>
-          {renderError ? null : <ActivityIndicator color="#c2a768" />}
-          <Text style={styles.loadingText}>{renderError || 'INITIALIZING EARTH'}</Text>
+        {!isReady ? (
+          <View style={styles.loading}>
+            {renderError ? null : <ActivityIndicator color="#c2a768" />}
+            <Text style={styles.loadingText}>{renderError || 'INITIALIZING EARTH'}</Text>
+          </View>
+        ) : null}
+
+        <View pointerEvents="none" style={styles.target}>
+          <View style={styles.targetOuter} />
+          <View style={styles.targetInner} />
+          <View style={styles.targetHorizontal} />
+          <View style={styles.targetVertical} />
+          <View style={styles.targetCenter} />
         </View>
-      ) : null}
 
-      <View pointerEvents="none" style={styles.target}>
-        <View style={styles.targetOuter} />
-        <View style={styles.targetInner} />
-        <View style={styles.targetHorizontal} />
-        <View style={styles.targetVertical} />
-        <View style={styles.targetCenter} />
-      </View>
+        <Text numberOfLines={1} pointerEvents="none" style={styles.attribution}>EARTH / NASA   BORDERS / NATURAL EARTH   CITIES / GEONAMES</Text>
 
-      <Text pointerEvents="none" style={styles.attribution}>EARTH / NASA   BORDERS / NATURAL EARTH   CITIES / GEONAMES</Text>
-
-      <View style={styles.zoomControls}>
-        <Pressable accessibilityLabel="Zoom in" onPress={() => changeZoom(-0.35)} style={styles.zoomButton}>
-          <Text style={styles.zoomButtonText}>+</Text>
-        </Pressable>
-        <View style={styles.zoomDivider} />
-        <Pressable accessibilityLabel="Zoom out" onPress={() => changeZoom(0.35)} style={styles.zoomButton}>
-          <Text style={styles.zoomButtonText}>−</Text>
-        </Pressable>
+        <View style={styles.zoomControls}>
+          <Pressable accessibilityLabel="Zoom in" onPress={() => changeZoom(-0.35)} style={styles.zoomButton}>
+            <Text style={styles.zoomButtonText}>+</Text>
+          </Pressable>
+          <View style={styles.zoomDivider} />
+          <Pressable accessibilityLabel="Zoom out" onPress={() => changeZoom(0.35)} style={styles.zoomButton}>
+            <Text style={styles.zoomButtonText}>−</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View pointerEvents="none" style={styles.readout}>
@@ -425,6 +428,7 @@ async function createExpoTexture(moduleReference: number) {
 
 const styles = StyleSheet.create({
   frame: { alignSelf: 'center', backgroundColor: 'transparent', overflow: 'hidden', position: 'relative' },
+  globeViewport: { flex: 1, overflow: 'hidden', position: 'relative' },
   loading: { ...StyleSheet.absoluteFillObject, alignItems: 'center', backgroundColor: 'rgba(6,7,8,0.82)', justifyContent: 'center' },
   loadingText: { color: '#66635b', fontSize: 7, fontWeight: '800', letterSpacing: 1.5, marginTop: 10 },
   target: { alignItems: 'center', height: 80, justifyContent: 'center', left: '50%', marginLeft: -40, marginTop: -40, position: 'absolute', top: '50%', width: 80 },
@@ -438,7 +442,7 @@ const styles = StyleSheet.create({
   zoomButton: { alignItems: 'center', height: 34, justifyContent: 'center', width: 34 },
   zoomButtonText: { color: '#c7ae70', fontFamily: 'Georgia', fontSize: 20, fontWeight: '300', lineHeight: 22 },
   zoomDivider: { backgroundColor: 'rgba(255,255,255,0.12)', height: 1, marginHorizontal: 6 },
-  readout: { backgroundColor: 'rgba(6,7,8,0.48)', borderTopColor: 'rgba(224,194,123,0.22)', borderTopWidth: 1, bottom: 0, left: 0, paddingHorizontal: 13, paddingVertical: 11, position: 'absolute', right: 0 },
+  readout: { backgroundColor: 'rgba(6,7,8,0.48)', borderTopColor: 'rgba(224,194,123,0.22)', borderTopWidth: 1, minHeight: 66, paddingHorizontal: 13, paddingVertical: 10 },
   readoutLabel: { color: '#77736a', fontSize: 6, fontWeight: '800', letterSpacing: 1.45 },
   readoutCity: { color: '#eee9df', fontFamily: 'Georgia', fontSize: 17, marginTop: 2 },
   readoutCoordinates: { color: '#8d7b51', fontSize: 7, fontWeight: '700', letterSpacing: 0.75, marginTop: 3 },
