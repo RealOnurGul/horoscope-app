@@ -3,7 +3,6 @@ import {
   Animated,
   Easing,
   KeyboardAvoidingView,
-  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -11,6 +10,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 
 import { colors } from '../theme';
@@ -40,6 +40,7 @@ const YEARS = Array.from({ length: CURRENT_YEAR - 1899 }, (_, index) => CURRENT_
 const CITY_SUGGESTIONS = ['Toronto, Canada', 'New York, USA', 'London, UK', 'Istanbul, Türkiye', 'Tokyo, Japan'];
 const TOTAL_STEPS = 4;
 const DISPLAY_FONT = Platform.select({ android: 'serif', default: 'serif', ios: 'Didot' });
+const ZODIAC_GLYPHS = ['♈︎', '♉︎', '♊︎', '♋︎', '♌︎', '♍︎', '♎︎', '♏︎', '♐︎', '♑︎', '♒︎', '♓︎'];
 
 export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   const [step, setStep] = useState(0);
@@ -47,6 +48,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   const [day, setDay] = useState(14);
   const [year, setYear] = useState(CURRENT_YEAR - 25);
   const [birthHour, setBirthHour] = useState(12);
+  const [birthMinute, setBirthMinute] = useState(0);
   const [birthTimeWindow, setBirthTimeWindow] = useState<BirthTimeWindow | null>('Afternoon');
   const [birthPlace, setBirthPlace] = useState('');
   const sceneY = useRef(new Animated.Value(0)).current;
@@ -91,13 +93,14 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     });
   }
 
-  function updateBirthHour(hour: number | null) {
+  function updateBirthTime(hour: number | null, minute = 0) {
     if (hour === null) {
       setBirthTimeWindow(null);
       return;
     }
 
     setBirthHour(hour);
+    setBirthMinute(minute);
     setBirthTimeWindow(timeWindowForHour(hour));
   }
 
@@ -105,6 +108,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     await onComplete({
       birthDate: toLocalDateString(birthDate),
       birthPlace: birthPlace.trim() || null,
+      birthTime: birthTimeWindow ? toStoredTime(birthHour, birthMinute) : null,
       birthTimeWindow,
       createdAt: new Date().toISOString(),
       zodiacSignId: sign.id,
@@ -146,7 +150,8 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
         {step === 2 ? (
           <TimeOrbitStep
             hour={birthHour}
-            onChange={updateBirthHour}
+            minute={birthMinute}
+            onChange={updateBirthTime}
             onContinue={() => transitionTo(3)}
             value={birthTimeWindow}
           />
@@ -162,6 +167,8 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
           <RevealStep
             birthDate={birthDate}
             birthPlace={birthPlace}
+            birthHour={birthHour}
+            birthMinute={birthMinute}
             birthTimeWindow={birthTimeWindow}
             onFinish={() => void finish()}
             sign={sign}
@@ -292,7 +299,7 @@ function WheelPicker({
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ animated: false, y: selectedIndex * WHEEL_ITEM_HEIGHT });
     });
-  }, [items.length, selectedIndex]);
+  }, [items.length]);
 
   function settle(offsetY: number) {
     const index = Math.max(0, Math.min(items.length - 1, Math.round(offsetY / WHEEL_ITEM_HEIGHT)));
@@ -307,7 +314,11 @@ function WheelPicker({
         contentContainerStyle={styles.wheelContent}
         decelerationRate="fast"
         onMomentumScrollEnd={(event) => settle(event.nativeEvent.contentOffset.y)}
-        onScrollEndDrag={(event) => settle(event.nativeEvent.contentOffset.y)}
+        onScrollEndDrag={(event) => {
+          if (Math.abs(event.nativeEvent.velocity?.y ?? 0) < 0.05) {
+            settle(event.nativeEvent.contentOffset.y);
+          }
+        }}
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
         snapToInterval={WHEEL_ITEM_HEIGHT}
@@ -329,74 +340,264 @@ function WheelPicker({
 
 function TimeOrbitStep({
   hour,
+  minute,
   onChange,
   onContinue,
   value,
 }: {
   hour: number;
-  onChange: (hour: number | null) => void;
+  minute: number;
+  onChange: (hour: number | null, minute?: number) => void;
   onContinue: () => void;
   value: BirthTimeWindow | null;
 }) {
-  const dialSize = 252;
+  const { height, width } = useWindowDimensions();
+  const dialSize = Math.min(width - 72, height < 700 ? 160 : height < 780 ? 190 : height < 850 ? 218 : 238);
   const center = dialSize / 2;
-  const orbitRadius = 96;
-  const angle = (hour / 24) * Math.PI * 2 - Math.PI / 2;
-  const knobX = center + Math.cos(angle) * orbitRadius - 24;
-  const knobY = center + Math.sin(angle) * orbitRadius - 24;
+  const isPm = hour >= 12;
+  const hourAngle = ((hour % 12) + minute / 60) * 30;
+  const minuteAngle = minute * 6;
+  const hourHandRotation = useRef(new Animated.Value(hourAngle)).current;
+  const minuteHandRotation = useRef(new Animated.Value(minuteAngle)).current;
+  const tickRadius = center - 14;
+  const zodiacRadius = center - 31;
+  const numeralRadius = Math.max(30, center - 58);
+  const hourOnClock = hour % 12 || 12;
 
-  const panResponder = useMemo(
-    () => PanResponder.create({
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (event) => updateFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY),
-      onPanResponderMove: (event) => updateFromPoint(event.nativeEvent.locationX, event.nativeEvent.locationY),
-      onStartShouldSetPanResponder: () => true,
-    }),
-    [onChange],
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(hourHandRotation, {
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
+        toValue: hourAngle,
+        useNativeDriver: true,
+      }),
+      Animated.timing(minuteHandRotation, {
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
+        toValue: minuteAngle,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [hourAngle, hourHandRotation, minuteAngle, minuteHandRotation]);
+
+  return (
+    <View style={styles.timeStepContent}>
+      <View>
+        <Text style={styles.eyebrow}>02  /  TIME</Text>
+        <Text style={styles.questionTitle}>Your birth time</Text>
+        <Text style={styles.questionDescription}>
+          Scroll each wheel to the closest time you know. Five-minute precision is enough.
+        </Text>
+      </View>
+
+      <View style={styles.timeInteraction}>
+        <View pointerEvents="none" style={styles.orbitWrap}>
+          <View style={[styles.timeDial, { borderRadius: center, height: dialSize, width: dialSize }]}>
+          <View style={[styles.clockInnerRing, { borderRadius: dialSize * 0.39, height: dialSize * 0.78, left: dialSize * 0.11, top: dialSize * 0.11, width: dialSize * 0.78 }]} />
+          <View style={[styles.clockCenterRing, { borderRadius: dialSize * 0.25, height: dialSize * 0.5, left: dialSize * 0.25, top: dialSize * 0.25, width: dialSize * 0.5 }]} />
+
+          {Array.from({ length: 60 }, (_, index) => {
+            const angle = (index / 60) * Math.PI * 2 - Math.PI / 2;
+            const isHour = index % 5 === 0;
+            return (
+              <View
+                key={`tick-${index}`}
+                style={[
+                  styles.clockTick,
+                  isHour && styles.clockTickHour,
+                  {
+                    left: center + Math.cos(angle) * tickRadius - (isHour ? 5 : 2),
+                    top: center + Math.sin(angle) * tickRadius,
+                    transform: [{ rotate: `${index * 6 + 90}deg` }],
+                  },
+                ]}
+              />
+            );
+          })}
+
+          {ZODIAC_GLYPHS.map((glyph, index) => {
+            const angle = (index / 12) * Math.PI * 2 - Math.PI / 2;
+            return (
+              <Text
+                key={glyph}
+                style={[
+                  styles.clockZodiac,
+                  {
+                    left: center + Math.cos(angle) * zodiacRadius - 9,
+                    top: center + Math.sin(angle) * zodiacRadius - 10,
+                  },
+                ]}
+              >
+                {glyph}
+              </Text>
+            );
+          })}
+
+          {[12, 3, 6, 9].map((number, index) => {
+            const angle = (index / 4) * Math.PI * 2 - Math.PI / 2;
+            return (
+              <Text
+                key={number}
+                style={[
+                  styles.clockNumeral,
+                  {
+                    left: center + Math.cos(angle) * numeralRadius - 9,
+                    top: center + Math.sin(angle) * numeralRadius - 9,
+                  },
+                ]}
+              >
+                {number}
+              </Text>
+            );
+          })}
+
+          <Animated.View
+            style={[
+              styles.clockHandLayer,
+              {
+                height: dialSize,
+                transform: [{ rotate: hourHandRotation.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] }) }],
+                width: dialSize,
+              },
+            ]}
+          >
+            <View style={[styles.clockHourHand, { height: dialSize * 0.2, left: center - 1, top: dialSize * 0.3 }]} />
+          </Animated.View>
+          <Animated.View
+            style={[
+              styles.clockHandLayer,
+              {
+                height: dialSize,
+                transform: [{ rotate: minuteHandRotation.interpolate({ inputRange: [0, 360], outputRange: ['0deg', '360deg'] }) }],
+                width: dialSize,
+              },
+            ]}
+          >
+            <View style={[styles.clockMinuteHand, { height: dialSize * 0.29, left: center - 0.5, top: dialSize * 0.21 }]} />
+          </Animated.View>
+          <View style={styles.timeCenter}>
+            <Text style={styles.timeValue}>{formatExactTime(hour, minute)}</Text>
+            <Text style={styles.timeWindow}>{value ?? 'Unknown'}</Text>
+          </View>
+          <View style={[styles.clockPin, { left: center - 4, top: center - 4 }]} />
+          </View>
+        </View>
+
+        <View style={styles.timeWheelSection}>
+          <View style={styles.timeWheelLabels}>
+            <Text style={[styles.timeWheelLabel, { flex: 1 }]}>HOUR</Text>
+            <Text style={[styles.timeWheelLabel, { flex: 1 }]}>MINUTE</Text>
+            <Text style={[styles.timeWheelLabel, { flex: 0.82 }]}>PERIOD</Text>
+          </View>
+          <View style={styles.timeWheelFrame}>
+            <View pointerEvents="none" style={styles.timeWheelFocus} />
+            <TimeWheelPicker
+              accessibilityLabel="Birth hour"
+              flex={1}
+              items={Array.from({ length: 12 }, (_, index) => String(index + 1))}
+              onChange={(index) => onChange((index + 1) % 12 + (isPm ? 12 : 0), minute)}
+              selectedIndex={hourOnClock - 1}
+            />
+            <TimeWheelPicker
+              accessibilityLabel="Birth minute"
+              flex={1}
+              items={Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, '0'))}
+              onChange={(index) => onChange(hour, index * 5)}
+              selectedIndex={minute / 5}
+            />
+            <TimeWheelPicker
+              accessibilityLabel="AM or PM"
+              flex={0.82}
+              items={['AM', 'PM']}
+              onChange={(index) => onChange((hour % 12) + (index === 1 ? 12 : 0), minute)}
+              selectedIndex={isPm ? 1 : 0}
+            />
+          </View>
+        </View>
+
+        <View>
+          <PrimaryButton label={`Use ${formatExactTime(hour, minute)}`} onPress={onContinue} />
+          <Pressable
+            onPress={() => {
+              onChange(null);
+              onContinue();
+            }}
+            style={styles.textButton}
+          >
+            <Text style={styles.textButtonLabel}>I don’t know my birth time</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
   );
+}
 
-  function updateFromPoint(x: number, y: number) {
-    let pointAngle = Math.atan2(y - center, x - center) + Math.PI / 2;
-    if (pointAngle < 0) pointAngle += Math.PI * 2;
-    onChange(Math.round((pointAngle / (Math.PI * 2)) * 24) % 24);
+const TIME_WHEEL_ITEM_HEIGHT = 42;
+
+function TimeWheelPicker({
+  accessibilityLabel,
+  flex,
+  items,
+  onChange,
+  selectedIndex,
+}: {
+  accessibilityLabel: string;
+  flex: number;
+  items: string[];
+  onChange: (index: number) => void;
+  selectedIndex: number;
+}) {
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ animated: false, y: selectedIndex * TIME_WHEEL_ITEM_HEIGHT });
+    });
+  }, [items.length]);
+
+  function settle(offsetY: number) {
+    const index = Math.max(0, Math.min(items.length - 1, Math.round(offsetY / TIME_WHEEL_ITEM_HEIGHT)));
+    onChange(index);
   }
 
   return (
-    <StepShell
-      eyebrow="02  /  TIME"
-      title="Your birth time"
-      description="Move the marker to the closest hour. An estimate is completely fine."
-    >
-      <View style={styles.orbitWrap}>
-        <View {...panResponder.panHandlers} style={[styles.timeDial, { height: dialSize, width: dialSize }]}>
-          <View style={styles.timeDialInner} />
-          <View style={styles.orbitVertical} />
-          <View style={styles.orbitHorizontal} />
-          <Text style={[styles.orbitMarker, styles.orbitMarkerTop]}>MIDNIGHT</Text>
-          <Text style={[styles.orbitMarker, styles.orbitMarkerRight]}>6 AM</Text>
-          <Text style={[styles.orbitMarker, styles.orbitMarkerBottom]}>NOON</Text>
-          <Text style={[styles.orbitMarker, styles.orbitMarkerLeft]}>6 PM</Text>
-          <View style={[styles.sunKnob, { left: knobX, top: knobY }]}>
-            <View style={styles.sunCore} />
-          </View>
-          <View style={styles.timeCenter}>
-            <Text style={styles.timeValue}>{formatHour(hour)}</Text>
-            <Text style={styles.timeWindow}>{value ?? 'Unknown'}</Text>
-          </View>
-        </View>
-      </View>
-
-      <PrimaryButton label="Next: birthplace" onPress={onContinue} />
-      <Pressable
-        onPress={() => {
-          onChange(null);
-          onContinue();
+    <View style={{ flex }}>
+      <ScrollView
+        accessibilityLabel={accessibilityLabel}
+        bounces={false}
+        contentContainerStyle={styles.timeWheelContent}
+        decelerationRate="fast"
+        directionalLockEnabled
+        nestedScrollEnabled
+        onMomentumScrollEnd={(event) => settle(event.nativeEvent.contentOffset.y)}
+        onScroll={(event) => {
+          const index = Math.max(
+            0,
+            Math.min(items.length - 1, Math.round(event.nativeEvent.contentOffset.y / TIME_WHEEL_ITEM_HEIGHT)),
+          );
+          if (index !== selectedIndex) onChange(index);
         }}
-        style={styles.textButton}
+        onScrollEndDrag={(event) => {
+          if (Math.abs(event.nativeEvent.velocity?.y ?? 0) < 0.05) {
+            settle(event.nativeEvent.contentOffset.y);
+          }
+        }}
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        snapToAlignment="start"
+        snapToInterval={TIME_WHEEL_ITEM_HEIGHT}
       >
-        <Text style={styles.textButtonLabel}>I don’t know my birth time</Text>
-      </Pressable>
-    </StepShell>
+        {items.map((item, index) => (
+          <View key={item} style={styles.timeWheelItem}>
+            <Text style={[styles.timeWheelItemText, index === selectedIndex && styles.timeWheelItemTextSelected]}>
+              {item}
+            </Text>
+          </View>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -484,12 +685,16 @@ function CoordinateField() {
 
 function RevealStep({
   birthDate,
+  birthHour,
+  birthMinute,
   birthPlace,
   birthTimeWindow,
   onFinish,
   sign,
 }: {
   birthDate: Date;
+  birthHour: number;
+  birthMinute: number;
   birthPlace: string;
   birthTimeWindow: BirthTimeWindow | null;
   onFinish: () => void;
@@ -526,7 +731,10 @@ function RevealStep({
           label="Born"
           value={birthDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
         />
-        <ProfileLine label="Time" value={birthTimeWindow ?? 'Not provided'} />
+        <ProfileLine
+          label="Time"
+          value={birthTimeWindow ? `${formatExactTime(birthHour, birthMinute)} · ${birthTimeWindow}` : 'Not provided'}
+        />
         <ProfileLine label="Place" value={birthPlace.trim() || 'Not provided'} />
         <PrimaryButton label="View today’s reading" onPress={onFinish} />
       </View>
@@ -714,10 +922,13 @@ function timeWindowForHour(hour: number): BirthTimeWindow {
   return 'Night';
 }
 
-function formatHour(hour: number) {
-  if (hour === 0) return '12 AM';
-  if (hour === 12) return '12 PM';
-  return hour > 12 ? `${hour - 12} PM` : `${hour} AM`;
+function formatExactTime(hour: number, minute: number) {
+  const hourOnClock = hour % 12 || 12;
+  return `${hourOnClock}:${String(minute).padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}`;
+}
+
+function toStoredTime(hour: number, minute: number) {
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
 const styles = StyleSheet.create({
@@ -787,21 +998,32 @@ const styles = StyleSheet.create({
   wheelItemTextSelected: { color: '#e9e5db', fontSize: 19 },
   wheelFocus: { backgroundColor: 'rgba(185,160,100,0.025)', borderBottomColor: 'rgba(185,160,100,0.32)', borderBottomWidth: 1, borderTopColor: 'rgba(185,160,100,0.32)', borderTopWidth: 1, height: WHEEL_ITEM_HEIGHT, left: 5, position: 'absolute', right: 5, top: 65 },
 
+  timeStepContent: { flex: 1, paddingBottom: 18, paddingHorizontal: 26, paddingTop: 14 },
+  timeInteraction: { flex: 1, justifyContent: 'space-between', paddingTop: 10 },
   orbitWrap: { alignItems: 'center', marginBottom: 8 },
-  timeDial: { alignItems: 'center', alignSelf: 'center', backgroundColor: 'rgba(8,9,10,0.84)', borderColor: 'rgba(185,160,100,0.36)', borderRadius: 126, borderWidth: 1, justifyContent: 'center', position: 'relative' },
-  timeDialInner: { borderColor: 'rgba(255,255,255,0.11)', borderRadius: 83, borderWidth: 1, height: 166, position: 'absolute', width: 166 },
-  orbitVertical: { backgroundColor: 'rgba(255,255,255,0.055)', height: 166, position: 'absolute', width: 1 },
-  orbitHorizontal: { backgroundColor: 'rgba(255,255,255,0.055)', height: 1, position: 'absolute', width: 166 },
-  orbitMarker: { color: '#5c5c5a', fontSize: 6, fontWeight: '800', letterSpacing: 1.1, position: 'absolute' },
-  orbitMarkerTop: { top: 14 },
-  orbitMarkerRight: { right: 8, top: 121 },
-  orbitMarkerBottom: { bottom: 14 },
-  orbitMarkerLeft: { left: 9, top: 121 },
-  sunKnob: { alignItems: 'center', backgroundColor: '#08090a', borderColor: '#c0a869', borderRadius: 24, borderWidth: 1, height: 48, justifyContent: 'center', position: 'absolute', width: 48 },
-  sunCore: { backgroundColor: '#bda467', borderRadius: 5, height: 10, width: 10 },
-  timeCenter: { alignItems: 'center' },
-  timeValue: { color: '#e8e4dc', fontFamily: DISPLAY_FONT, fontSize: 28, letterSpacing: -0.5 },
-  timeWindow: { color: '#9e8856', fontSize: 8, fontWeight: '800', letterSpacing: 1.5, marginTop: 3, textTransform: 'uppercase' },
+  timeDial: { alignItems: 'center', alignSelf: 'center', backgroundColor: 'rgba(7,8,9,0.95)', borderColor: 'rgba(193,167,104,0.55)', borderWidth: 1, justifyContent: 'center', position: 'relative' },
+  clockInnerRing: { borderColor: 'rgba(193,167,104,0.18)', borderWidth: 1, position: 'absolute' },
+  clockCenterRing: { borderColor: 'rgba(255,255,255,0.075)', borderWidth: 1, position: 'absolute' },
+  clockTick: { backgroundColor: 'rgba(255,255,255,0.18)', height: 1, position: 'absolute', width: 4 },
+  clockTickHour: { backgroundColor: 'rgba(193,167,104,0.72)', width: 10 },
+  clockZodiac: { color: '#806f49', fontFamily: DISPLAY_FONT, fontSize: 12, height: 20, position: 'absolute', textAlign: 'center', width: 18 },
+  clockNumeral: { color: '#77746d', fontFamily: DISPLAY_FONT, fontSize: 11, height: 18, position: 'absolute', textAlign: 'center', width: 18 },
+  clockHandLayer: { left: 0, position: 'absolute', top: 0 },
+  clockHourHand: { backgroundColor: '#d4c08b', position: 'absolute', width: 2 },
+  clockMinuteHand: { backgroundColor: '#8b7a52', position: 'absolute', width: 1 },
+  timeCenter: { alignItems: 'center', backgroundColor: '#08090a', borderColor: 'rgba(193,167,104,0.23)', borderRadius: 46, borderWidth: 1, justifyContent: 'center', minHeight: 82, minWidth: 92, paddingHorizontal: 9, position: 'absolute' },
+  timeValue: { color: '#eee9df', fontFamily: DISPLAY_FONT, fontSize: 22, letterSpacing: -0.35 },
+  timeWindow: { color: '#8f7b4e', fontSize: 7, fontWeight: '800', letterSpacing: 1.35, marginTop: 3, textTransform: 'uppercase' },
+  clockPin: { backgroundColor: '#d8c38a', borderColor: '#08090a', borderRadius: 4, borderWidth: 2, height: 8, position: 'absolute', width: 8 },
+  timeWheelSection: { marginTop: 4 },
+  timeWheelLabels: { flexDirection: 'row', paddingBottom: 7, paddingHorizontal: 6 },
+  timeWheelLabel: { color: '#585856', fontSize: 7, fontWeight: '800', letterSpacing: 1.35, textAlign: 'center' },
+  timeWheelFrame: { backgroundColor: 'rgba(8,9,10,0.96)', borderBottomColor: 'rgba(255,255,255,0.14)', borderBottomWidth: 1, borderTopColor: 'rgba(255,255,255,0.14)', borderTopWidth: 1, flexDirection: 'row', height: 126, overflow: 'hidden', position: 'relative' },
+  timeWheelFocus: { backgroundColor: 'rgba(193,167,104,0.035)', borderBottomColor: 'rgba(193,167,104,0.32)', borderBottomWidth: 1, borderTopColor: 'rgba(193,167,104,0.32)', borderTopWidth: 1, height: TIME_WHEEL_ITEM_HEIGHT, left: 4, position: 'absolute', right: 4, top: 42 },
+  timeWheelContent: { paddingVertical: 42 },
+  timeWheelItem: { alignItems: 'center', height: TIME_WHEEL_ITEM_HEIGHT, justifyContent: 'center' },
+  timeWheelItemText: { color: '#50504e', fontFamily: DISPLAY_FONT, fontSize: 17 },
+  timeWheelItemTextSelected: { color: '#eee9df', fontSize: 22 },
 
   coordinateStage: { alignSelf: 'center', backgroundColor: 'rgba(8,9,10,0.62)', borderColor: 'rgba(255,255,255,0.11)', borderWidth: 1, height: 176, marginBottom: 14, overflow: 'hidden', position: 'relative', width: '100%' },
   coordinateHorizontal: { backgroundColor: 'rgba(255,255,255,0.045)', height: 1, left: 0, position: 'absolute', right: 0 },
