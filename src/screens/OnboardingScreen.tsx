@@ -2,20 +2,19 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
 
-import { colors } from '../theme';
+import { AstrologicalGlobe } from '../components/AstrologicalGlobe';
 import { AppProfile, BirthTimeWindow } from '../types/profile';
 import { getZodiacSign, toLocalDateString } from '../utils/astrology';
+import { Coordinates, GlobeSelection } from '../utils/geo';
 
 type OnboardingScreenProps = {
   onComplete: (profile: AppProfile) => Promise<void>;
@@ -37,7 +36,6 @@ const MONTHS = [
 ];
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: CURRENT_YEAR - 1899 }, (_, index) => CURRENT_YEAR - index);
-const CITY_SUGGESTIONS = ['Toronto, Canada', 'New York, USA', 'London, UK', 'Istanbul, Türkiye', 'Tokyo, Japan'];
 const TOTAL_STEPS = 4;
 const DISPLAY_FONT = Platform.select({ android: 'serif', default: 'serif', ios: 'Didot' });
 const ZODIAC_GLYPHS = ['♈︎', '♉︎', '♊︎', '♋︎', '♌︎', '♍︎', '♎︎', '♏︎', '♐︎', '♑︎', '♒︎', '♓︎'];
@@ -51,6 +49,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   const [birthMinute, setBirthMinute] = useState(0);
   const [birthTimeWindow, setBirthTimeWindow] = useState<BirthTimeWindow | null>('Afternoon');
   const [birthPlace, setBirthPlace] = useState('');
+  const [birthCoordinates, setBirthCoordinates] = useState<Coordinates | null>(null);
   const sceneY = useRef(new Animated.Value(0)).current;
   const sceneOpacity = useRef(new Animated.Value(1)).current;
   const sceneScale = useRef(new Animated.Value(1)).current;
@@ -106,6 +105,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
 
   async function finish() {
     await onComplete({
+      birthCoordinates,
       birthDate: toLocalDateString(birthDate),
       birthPlace: birthPlace.trim() || null,
       birthTime: birthTimeWindow ? toStoredTime(birthHour, birthMinute) : null,
@@ -158,8 +158,16 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
         ) : null}
         {step === 3 ? (
           <PlaceGlobeStep
-            onChange={setBirthPlace}
             onContinue={() => transitionTo(4)}
+            onSkip={() => {
+              setBirthCoordinates(null);
+              setBirthPlace('');
+              transitionTo(4);
+            }}
+            onSelection={(selection) => {
+              setBirthCoordinates({ latitude: selection.latitude, longitude: selection.longitude });
+              setBirthPlace(`${selection.city.name}, ${selection.city.country}`);
+            }}
             value={birthPlace}
           />
         ) : null}
@@ -602,83 +610,39 @@ function TimeWheelPicker({
 }
 
 function PlaceGlobeStep({
-  onChange,
   onContinue,
+  onSkip,
+  onSelection,
   value,
 }: {
-  onChange: (value: string) => void;
   onContinue: () => void;
+  onSkip: () => void;
+  onSelection: (selection: GlobeSelection) => void;
   value: string;
 }) {
-  return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-      <StepShell
-        eyebrow="03  /  PLACE"
-        title="Your birthplace"
-        description="Enter a city and country. You can skip this and add it later."
-      >
-        <CoordinateField />
-        <View style={styles.placeField}>
-          <Text style={styles.placePin}>⌖</Text>
-          <TextInput
-            autoCapitalize="words"
-            autoCorrect={false}
-            onChangeText={onChange}
-            placeholder="City, country"
-            placeholderTextColor={colors.faint}
-            returnKeyType="done"
-            style={styles.placeInput}
-            value={value}
-          />
-        </View>
-        <View style={styles.citySuggestions}>
-          {CITY_SUGGESTIONS.map((city) => (
-            <Pressable key={city} onPress={() => onChange(city)} style={styles.cityChip}>
-              <Text style={styles.cityChipText}>{city.split(',')[0]}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <PrimaryButton label={value.trim() ? 'Review profile' : 'Skip for now'} onPress={onContinue} />
-      </StepShell>
-    </KeyboardAvoidingView>
-  );
-}
-
-function CoordinateField() {
-  const scan = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(scan, { duration: 3600, easing: Easing.inOut(Easing.cubic), toValue: 1, useNativeDriver: true }),
-        Animated.timing(scan, { duration: 3600, easing: Easing.inOut(Easing.cubic), toValue: 0, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [scan]);
+  const { height, width } = useWindowDimensions();
+  const globeSize = Math.min(width - 36, height < 740 ? 310 : height < 850 ? 350 : 382);
 
   return (
-    <View style={styles.coordinateStage}>
-      {[1, 2, 3, 4].map((index) => (
-        <View key={`h-${index}`} style={[styles.coordinateHorizontal, { top: `${index * 20}%` }]} />
-      ))}
-      {[1, 2, 3, 4, 5].map((index) => (
-        <View key={`v-${index}`} style={[styles.coordinateVertical, { left: `${index * 16.66}%` }]} />
-      ))}
-      <View style={styles.coordinateOrbitOuter} />
-      <View style={styles.coordinateOrbitInner} />
-      <View style={styles.coordinateCrossHorizontal} />
-      <View style={styles.coordinateCrossVertical} />
-      <View style={styles.coordinateTarget} />
-      <Animated.View
-        style={[
-          styles.coordinateScan,
-          { transform: [{ translateX: scan.interpolate({ inputRange: [0, 1], outputRange: [-130, 130] }) }] },
-        ]}
-      />
-      <Text style={styles.coordinateLabelLeft}>LATITUDE</Text>
-      <Text style={styles.coordinateLabelRight}>LONGITUDE</Text>
+    <View style={styles.placeStepContent}>
+      <View>
+        <Text style={styles.eyebrow}>03  /  PLACE</Text>
+        <Text style={styles.questionTitle}>Your birthplace</Text>
+        <Text style={styles.questionDescription}>
+          Rotate Earth until the gold target rests over your birthplace. Pinch to change altitude.
+        </Text>
+      </View>
+
+      <View style={styles.placeGlobeArea}>
+        <AstrologicalGlobe onSelectionChange={onSelection} size={globeSize} />
+
+        <View>
+          {value ? <PrimaryButton label={`Use ${value}`} onPress={onContinue} /> : null}
+          <Pressable onPress={onSkip} style={styles.textButton}>
+            <Text style={styles.textButtonLabel}>{value ? 'Choose without birthplace' : 'Skip for now'}</Text>
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
@@ -1025,23 +989,8 @@ const styles = StyleSheet.create({
   timeWheelItemText: { color: '#50504e', fontFamily: DISPLAY_FONT, fontSize: 17 },
   timeWheelItemTextSelected: { color: '#eee9df', fontSize: 22 },
 
-  coordinateStage: { alignSelf: 'center', backgroundColor: 'rgba(8,9,10,0.62)', borderColor: 'rgba(255,255,255,0.11)', borderWidth: 1, height: 176, marginBottom: 14, overflow: 'hidden', position: 'relative', width: '100%' },
-  coordinateHorizontal: { backgroundColor: 'rgba(255,255,255,0.045)', height: 1, left: 0, position: 'absolute', right: 0 },
-  coordinateVertical: { backgroundColor: 'rgba(255,255,255,0.045)', bottom: 0, position: 'absolute', top: 0, width: 1 },
-  coordinateOrbitOuter: { borderColor: 'rgba(185,160,100,0.28)', borderRadius: 70, borderWidth: 1, height: 140, left: '50%', marginLeft: -70, marginTop: -70, position: 'absolute', top: '50%', width: 140 },
-  coordinateOrbitInner: { borderColor: 'rgba(255,255,255,0.1)', borderRadius: 43, borderWidth: 1, height: 86, left: '50%', marginLeft: -43, marginTop: -43, position: 'absolute', top: '50%', width: 86 },
-  coordinateCrossHorizontal: { backgroundColor: 'rgba(185,160,100,0.3)', height: 1, left: '28%', position: 'absolute', right: '28%', top: '50%' },
-  coordinateCrossVertical: { backgroundColor: 'rgba(185,160,100,0.3)', bottom: '18%', left: '50%', position: 'absolute', top: '18%', width: 1 },
-  coordinateTarget: { backgroundColor: '#b9a064', borderRadius: 3, height: 5, left: '50%', marginLeft: -2.5, marginTop: -2.5, position: 'absolute', top: '50%', width: 5 },
-  coordinateScan: { backgroundColor: 'rgba(185,160,100,0.2)', bottom: 0, left: '50%', position: 'absolute', top: 0, width: 1 },
-  coordinateLabelLeft: { bottom: 8, color: '#555553', fontSize: 6, fontWeight: '700', left: 9, letterSpacing: 1.3, position: 'absolute' },
-  coordinateLabelRight: { bottom: 8, color: '#555553', fontSize: 6, fontWeight: '700', letterSpacing: 1.3, position: 'absolute', right: 9 },
-  placeField: { alignItems: 'center', backgroundColor: 'rgba(8,9,10,0.9)', borderBottomColor: 'rgba(255,255,255,0.18)', borderBottomWidth: 1, flexDirection: 'row', paddingHorizontal: 4 },
-  placePin: { color: '#9f8958', fontSize: 16, marginRight: 10 },
-  placeInput: { color: '#e7e3db', flex: 1, fontSize: 16, paddingVertical: 15 },
-  citySuggestions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 10 },
-  cityChip: { borderColor: 'rgba(255,255,255,0.11)', borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 },
-  cityChipText: { color: '#888886', fontSize: 10, fontWeight: '700', letterSpacing: 0.4 },
+  placeStepContent: { flex: 1, paddingBottom: 18, paddingHorizontal: 18, paddingTop: 14 },
+  placeGlobeArea: { flex: 1, justifyContent: 'space-between', paddingTop: 12 },
 
   revealContent: { flex: 1, justifyContent: 'flex-end', paddingBottom: 24, paddingHorizontal: 22 },
   revealTop: { alignItems: 'center', flex: 1, justifyContent: 'center', paddingTop: 10 },
